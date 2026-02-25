@@ -21,10 +21,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/praetorian-inc/nerva/pkg/plugins"
+	"github.com/praetorian-inc/nerva/pkg/test"
 )
 
 // Realistic XMPP server response fixtures used across multiple test functions.
@@ -814,6 +816,63 @@ func TestShodanVectors(t *testing.T) {
 			require.NotNil(t, svc, "expected non-nil service for: %s", tt.name)
 
 			tt.validate(t, svc)
+		})
+	}
+}
+
+// TestIntegrationDocker runs the XMPP plugin against real XMPP servers
+// running in Docker containers. These tests are skipped when -short is used.
+func TestIntegrationDocker(t *testing.T) {
+	testcases := []test.Testcase{
+		{
+			// ejabberd is the most widely deployed open-source XMPP server.
+			// The official image exposes port 5222 and defaults to the
+			// "localhost" virtual host, which matches the to='localhost' probe
+			// sent when target.Host is empty (as testutil passes an empty Target{}).
+			// ejabberd sends the stream opening immediately but advertises caps
+			// only after TLS negotiation, so ServerSoftware may be empty here —
+			// we verify service detection (res != nil) and metadata type only.
+			Description: "ejabberd",
+			Port:        5222,
+			Protocol:    plugins.TCP,
+			Expected: func(res *plugins.Service) bool {
+				if res == nil {
+					return false
+				}
+				_, ok := res.Metadata().(plugins.ServiceXMPP)
+				return ok
+			},
+			RunConfig: dockertest.RunOptions{
+				Repository:   "ghcr.io/processone/ejabberd",
+				ExposedPorts: []string{"5222/tcp"},
+			},
+		},
+		{
+			// Prosody is another widely used XMPP server. Setting DOMAIN=localhost
+			// ensures the virtual host matches the to='localhost' probe sent by
+			// buildXMPPProbe when target.Host is empty.
+			Description: "prosody",
+			Port:        5222,
+			Protocol:    plugins.TCP,
+			Expected: func(res *plugins.Service) bool {
+				return res != nil
+			},
+			RunConfig: dockertest.RunOptions{
+				Repository: "prosody/prosody",
+				Env:        []string{"DOMAIN=localhost"},
+			},
+		},
+	}
+
+	p := &TCPPlugin{}
+	for _, tc := range testcases {
+		tc := tc
+		t.Run(tc.Description, func(t *testing.T) {
+			t.Parallel()
+			err := test.RunTest(t, tc, p)
+			if err != nil {
+				t.Errorf("%v", err)
+			}
 		})
 	}
 }
