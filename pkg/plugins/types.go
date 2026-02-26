@@ -76,6 +76,8 @@ const (
 	ProtoIKEv2            = "ikev2"
 	ProtoIMAP             = "imap"
 	ProtoIMAPS            = "imaps"
+	ProtoIRC              = "irc"
+	ProtoIRCS             = "ircs"
 	ProtoInfluxDB         = "influxdb"
 	ProtoIPMI             = "ipmi"
 	ProtoIPP              = "ipp"
@@ -471,6 +473,14 @@ func (e Service) Metadata() Metadata {
 		return p
 	case ProtoIMAPS:
 		var p ServiceIMAPS
+		_ = json.Unmarshal(e.Raw, &p)
+		return p
+	case ProtoIRC:
+		var p ServiceIRC
+		_ = json.Unmarshal(e.Raw, &p)
+		return p
+	case ProtoIRCS:
+		var p ServiceIRCS
 		_ = json.Unmarshal(e.Raw, &p)
 		return p
 	case ProtoInfluxDB:
@@ -891,6 +901,36 @@ type ServiceIMAPS struct {
 }
 
 func (e ServiceIMAPS) Type() string { return ProtoIMAPS }
+
+type ServiceIRC struct {
+	ServerName     string   `json:"serverName,omitempty"`
+	NetworkName    string   `json:"networkName,omitempty"`
+	Version        string   `json:"version,omitempty"`
+	ServerSoftware string   `json:"serverSoftware,omitempty"`
+	CreatedDate    string   `json:"createdDate,omitempty"`
+	UserModes      string   `json:"userModes,omitempty"`
+	ChannelModes   string   `json:"channelModes,omitempty"`
+	UserCount      int      `json:"userCount,omitempty"`
+	ChannelCount   int      `json:"channelCount,omitempty"`
+	CPEs           []string `json:"cpes,omitempty"`
+}
+
+func (e ServiceIRC) Type() string { return ProtoIRC }
+
+type ServiceIRCS struct {
+	ServerName     string   `json:"serverName,omitempty"`
+	NetworkName    string   `json:"networkName,omitempty"`
+	Version        string   `json:"version,omitempty"`
+	ServerSoftware string   `json:"serverSoftware,omitempty"`
+	CreatedDate    string   `json:"createdDate,omitempty"`
+	UserModes      string   `json:"userModes,omitempty"`
+	ChannelModes   string   `json:"channelModes,omitempty"`
+	UserCount      int      `json:"userCount,omitempty"`
+	ChannelCount   int      `json:"channelCount,omitempty"`
+	CPEs           []string `json:"cpes,omitempty"`
+}
+
+func (e ServiceIRCS) Type() string { return ProtoIRCS }
 
 type ServiceInfluxDB struct {
 	CPEs []string `json:"cpes,omitempty"` // Common Platform Enumeration identifiers for vulnerability tracking
