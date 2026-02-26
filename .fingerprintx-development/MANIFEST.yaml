@@ -1,0 +1,75 @@
+protocol_name: "VMware vSphere"
+protocol_slug: "vmware-vsphere"
+orchestration_skill: "orchestrating-nerva-development"
+created_at: "2026-02-26T00:00:00Z"
+description: |
+  VMware vSphere fingerprinting plugin for Nerva. Detects VMware ESXi,
+  vCenter Server, and vSphere hosts by querying the vSphere SOAP API at
+  /sdk with RetrieveServiceContent. Extracts vendor, product name,
+  version, build number, API type, and generates product-specific CPEs.
+  Differentiates ESXi (HostAgent) from vCenter (VirtualCenter) via apiType.
+
+status: "complete"
+current_phase: 19
+current_phase_name: "complete"
+work_type: "LARGE"
+
+triage:
+  work_type: "LARGE"
+  classified_at: "2026-02-26T00:00:00Z"
+  classification_method: "signal_parsing"
+  phases_to_execute: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+  phases_to_skip: []
+
+phases:
+  1_setup:
+    status: "complete"
+  2_triage:
+    status: "complete"
+  3_codebase_discovery:
+    status: "complete"
+  4_implementation:
+    status: "complete"
+  5_unit_tests:
+    status: "complete"
+    test_count: 29
+  6_live_testing:
+    status: "complete"
+
+plugin_type: "closed-source"
+default_ports: [443]
+protocols_output:
+  - "vmware-esxi"
+  - "vmware-vcenter"
+  - "vmware-vsphere"
+
+protocol_research:
+  detection_strategy: "SOAP API query to /sdk endpoint with 3-signal validation"
+  banner_patterns:
+    - "VMware, Inc."
+    - "VMware ESXi"
+    - "VMware vCenter Server"
+  shodan_queries:
+    - 'product:"VMware ESXi"'
+    - 'product:"VMware ESXi" port:443'
+    - 'product:"VMware vCenter" port:443'
+  test_hosts:
+    - host: "121.78.184.28"
+      expected: "vmware-esxi"
+      version: "5.5.0"
+    - host: "128.59.150.232"
+      expected: "vmware-esxi"
+      version: "6.0.0"
+    - host: "38.91.125.211"
+      expected: "vmware-vcenter"
+      version: "8.0.3"
+    - host: "208.100.11.72"
+      expected: "vmware-vcenter"
+      version: "6.5.0"
+    - host: "69.27.40.11"
+      expected: "vmware-vcenter"
+      version: "5.1.0"
+
+worktree:
+  path: ".worktrees/vmware-esxi-fingerprintx"
+  pre_plugin_commit: "cda92e7"

@@ -157,6 +157,9 @@ const (
 	ProtoTFTP             = "tftp"
 	ProtoTURN             = "turn"
 	ProtoVNC              = "vnc"
+	ProtoVMwareESXi       = "vmware-esxi"
+	ProtoVMwareVCenter    = "vmware-vcenter"
+	ProtoVMwareVSphere    = "vmware-vsphere"
 	ProtoWireGuard        = "wireguard"
 	ProtoXMPP             = "xmpp"
 	ProtoX11              = "x11"
@@ -291,6 +294,10 @@ func (e Service) Metadata() Metadata {
 		return p
 	case ProtoVNC:
 		var p ServiceVNC
+		_ = json.Unmarshal(e.Raw, &p)
+		return p
+	case ProtoVMwareESXi, ProtoVMwareVCenter, ProtoVMwareVSphere:
+		var p ServiceVMware
 		_ = json.Unmarshal(e.Raw, &p)
 		return p
 	case ProtoWireGuard:
@@ -1012,6 +1019,28 @@ func (e ServiceMSSQL) Type() string { return ProtoMSSQL }
 type ServiceVNC struct{}
 
 func (e ServiceVNC) Type() string { return ProtoVNC }
+
+type ServiceVMware struct {
+	ProductType   string   `json:"productType"`              // "esxi", "vcenter", or "vsphere"
+	FullName      string   `json:"fullName,omitempty"`
+	Build         string   `json:"build,omitempty"`
+	ApiType       string   `json:"apiType,omitempty"`
+	ApiVersion    string   `json:"apiVersion,omitempty"`
+	OsType        string   `json:"osType,omitempty"`
+	ProductLineId string   `json:"productLineId,omitempty"`
+	CPEs          []string `json:"cpes,omitempty"`
+}
+
+func (e ServiceVMware) Type() string {
+	switch e.ProductType {
+	case "esxi":
+		return ProtoVMwareESXi
+	case "vcenter":
+		return ProtoVMwareVCenter
+	default:
+		return ProtoVMwareVSphere
+	}
+}
 
 type ServiceTelnet struct {
 	ServerData string `json:"serverData"`
