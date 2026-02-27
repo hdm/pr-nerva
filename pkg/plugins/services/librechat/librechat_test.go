@@ -165,10 +165,10 @@ func TestDetectViaAPIConfig(t *testing.T) {
 		expectedDetect bool
 	}{
 		{
-			name: "valid JSON with 3 LibreChat fields",
+			name: "valid JSON with 4 LibreChat fields",
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
-				fmt.Fprintf(w, `{"registration":false,"socialLoginEnabled":true,"emailLoginEnabled":true}`)
+				fmt.Fprintf(w, `{"endpoints":{},"modelSpecs":{},"checkBalance":true,"interfaceConfig":{}}`)
 			},
 			expectedDetect: true,
 		},
@@ -176,7 +176,7 @@ func TestDetectViaAPIConfig(t *testing.T) {
 			name: "valid JSON with 2 LibreChat fields (threshold is >=2)",
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
-				fmt.Fprintf(w, `{"registration":false,"socialLoginEnabled":true}`)
+				fmt.Fprintf(w, `{"endpoints":{},"modelSpecs":{}}`)
 			},
 			expectedDetect: true,
 		},
@@ -184,7 +184,7 @@ func TestDetectViaAPIConfig(t *testing.T) {
 			name: "valid JSON with only 1 LibreChat field",
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
-				fmt.Fprintf(w, `{"registration":false}`)
+				fmt.Fprintf(w, `{"endpoints":{}}`)
 			},
 			expectedDetect: false,
 		},
@@ -210,6 +210,23 @@ func TestDetectViaAPIConfig(t *testing.T) {
 				fmt.Fprintf(w, `{}`)
 			},
 			expectedDetect: false,
+		},
+		{
+			name: "false positive: generic auth fields without LibreChat-specific fields",
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				// These fields would match the OLD (pre-fix) check but NOT the new one
+				fmt.Fprintf(w, `{"registration":false,"socialLoginEnabled":true,"emailLoginEnabled":true,"serverDomain":"example.com"}`)
+			},
+			expectedDetect: false,
+		},
+		{
+			name: "valid JSON with 3 LibreChat fields",
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				fmt.Fprintf(w, `{"endpoints":{},"checkBalance":true,"interfaceConfig":{}}`)
+			},
+			expectedDetect: true,
 		},
 	}
 
@@ -318,7 +335,7 @@ func TestLibreChatPlugin_Run_FullDetection(t *testing.T) {
 			fmt.Fprintf(w, `(function(){e.VERSION="v0.8.2";e.CONFIG_VERSION="1.3.3";console.log("LibreChat")})()`)
 		case "/api/config":
 			w.Header().Set("Content-Type", "application/json")
-			fmt.Fprintf(w, `{"registration":false,"socialLoginEnabled":true,"emailLoginEnabled":true}`)
+			fmt.Fprintf(w, `{"endpoints":{},"modelSpecs":{},"checkBalance":true,"interfaceConfig":{}}`)
 		case "/health":
 			w.WriteHeader(200)
 			fmt.Fprintf(w, "OK")
@@ -365,7 +382,7 @@ func TestLibreChatPlugin_Run_FallbackToAPIConfig(t *testing.T) {
 		case "/api/config":
 			// /api/config returns valid LibreChat config
 			w.Header().Set("Content-Type", "application/json")
-			fmt.Fprintf(w, `{"registration":false,"socialLoginEnabled":true,"emailLoginEnabled":true}`)
+			fmt.Fprintf(w, `{"endpoints":{},"modelSpecs":{},"checkBalance":true,"interfaceConfig":{}}`)
 		case "/health":
 			w.WriteHeader(200)
 			fmt.Fprintf(w, "OK")
@@ -427,6 +444,99 @@ func TestLibreChatPlugin_Run_NotDetected(t *testing.T) {
 	assert.Nil(t, service)
 }
 
+func TestLibreChatPlugin_Run_Phase1JSBundleFailsFallsBackToPhase2(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/":
+			w.Header().Set("Content-Type", "text/html")
+			// HTML has a script tag, but the JS bundle will fail
+			fmt.Fprintf(w, `<html><head><script type="module" crossorigin src="/assets/index-broken.js"></script></head></html>`)
+		case "/assets/index-broken.js":
+			// JS bundle returns 500 -- Phase 1 will get detected=false
+			w.WriteHeader(500)
+		case "/api/config":
+			// Phase 2 succeeds
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintf(w, `{"endpoints":{},"modelSpecs":{},"checkBalance":true,"interfaceConfig":{}}`)
+		case "/health":
+			w.WriteHeader(200)
+			fmt.Fprintf(w, "OK")
+		default:
+			w.WriteHeader(404)
+		}
+	}))
+	defer server.Close()
+
+	addr := parseTestServerAddr(t, server.URL)
+	conn, err := net.DialTimeout("tcp", strings.TrimPrefix(server.URL, "http://"), 5*time.Second)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	target := plugins.Target{
+		Host:    addr.Addr().String(),
+		Address: addr,
+	}
+
+	plugin := &LibreChatPlugin{}
+	service, err := plugin.Run(conn, 5*time.Second, target)
+
+	require.NoError(t, err)
+	require.NotNil(t, service, "should detect via Phase 2 when Phase 1 JS bundle fails")
+
+	var librechatService plugins.ServiceLibreChat
+	err = json.Unmarshal(service.Raw, &librechatService)
+	require.NoError(t, err)
+	assert.Empty(t, librechatService.ConfigVersion, "no config version without JS bundle")
+	assert.True(t, librechatService.HasHealth)
+	assert.Equal(t, "cpe:2.3:a:librechat:librechat:*:*:*:*:*:*:*:*", librechatService.CPEs[0], "wildcard version from Phase 2")
+}
+
+func TestLibreChatPlugin_Run_Phase1NoVersionFallsBackToPhase2(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/":
+			w.Header().Set("Content-Type", "text/html")
+			fmt.Fprintf(w, `<html><head><script type="module" crossorigin src="/assets/index-other.js"></script></head></html>`)
+		case "/assets/index-other.js":
+			w.Header().Set("Content-Type", "application/javascript")
+			// Valid JS bundle but no VERSION pattern -- different Vite app
+			fmt.Fprintf(w, `(function(){console.log("Some other app");var config={name:"not-librechat"}})()`)
+		case "/api/config":
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintf(w, `{"endpoints":{},"modelSpecs":{},"checkBalance":true,"interfaceConfig":{}}`)
+		case "/health":
+			w.WriteHeader(200)
+			fmt.Fprintf(w, "OK")
+		default:
+			w.WriteHeader(404)
+		}
+	}))
+	defer server.Close()
+
+	addr := parseTestServerAddr(t, server.URL)
+	conn, err := net.DialTimeout("tcp", strings.TrimPrefix(server.URL, "http://"), 5*time.Second)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	target := plugins.Target{
+		Host:    addr.Addr().String(),
+		Address: addr,
+	}
+
+	plugin := &LibreChatPlugin{}
+	service, err := plugin.Run(conn, 5*time.Second, target)
+
+	require.NoError(t, err)
+	require.NotNil(t, service, "should detect via Phase 2 when Phase 1 JS has no VERSION")
+
+	var librechatService plugins.ServiceLibreChat
+	err = json.Unmarshal(service.Raw, &librechatService)
+	require.NoError(t, err)
+	assert.Empty(t, librechatService.ConfigVersion)
+	assert.True(t, librechatService.HasHealth)
+	assert.Equal(t, "cpe:2.3:a:librechat:librechat:*:*:*:*:*:*:*:*", librechatService.CPEs[0])
+}
+
 // TestLibreChatPlugin_PortPriority tests the PortPriority method
 func TestLibreChatPlugin_PortPriority(t *testing.T) {
 	plugin := &LibreChatPlugin{}
@@ -482,4 +592,57 @@ func TestLibreChatPlugin_Type(t *testing.T) {
 func TestLibreChatPlugin_Priority(t *testing.T) {
 	plugin := &LibreChatPlugin{}
 	assert.Equal(t, 100, plugin.Priority())
+}
+
+func TestLibreChatTLSPlugin_Run_FullDetection(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/":
+			w.Header().Set("Content-Type", "text/html")
+			fmt.Fprintf(w, `<html><head><script type="module" crossorigin src="/assets/index-tls123.js"></script></head></html>`)
+		case "/assets/index-tls123.js":
+			w.Header().Set("Content-Type", "application/javascript")
+			fmt.Fprintf(w, `(function(){e.VERSION="v0.9.1";e.CONFIG_VERSION="2.0.0"})()`)
+		case "/health":
+			w.WriteHeader(200)
+			fmt.Fprintf(w, "OK")
+		default:
+			w.WriteHeader(404)
+		}
+	}))
+	defer server.Close()
+
+	addr := parseTestServerAddr(t, server.URL)
+	conn, err := net.DialTimeout("tcp", strings.TrimPrefix(server.URL, "http://"), 5*time.Second)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	target := plugins.Target{
+		Host:    addr.Addr().String(),
+		Address: addr,
+	}
+
+	plugin := &LibreChatTLSPlugin{}
+	service, err := plugin.Run(conn, 5*time.Second, target)
+
+	require.NoError(t, err)
+	require.NotNil(t, service)
+
+	var librechatService plugins.ServiceLibreChat
+	err = json.Unmarshal(service.Raw, &librechatService)
+	require.NoError(t, err)
+	assert.Equal(t, "2.0.0", librechatService.ConfigVersion)
+	assert.True(t, librechatService.HasHealth)
+	assert.Equal(t, "cpe:2.3:a:librechat:librechat:0.9.1:*:*:*:*:*:*:*", librechatService.CPEs[0])
+}
+
+func TestLibreChatTLSPlugin_Metadata(t *testing.T) {
+	plugin := &LibreChatTLSPlugin{}
+
+	assert.Equal(t, "librechat", plugin.Name())
+	assert.Equal(t, plugins.TCPTLS, plugin.Type())
+	assert.Equal(t, 100, plugin.Priority())
+	assert.True(t, plugin.PortPriority(443))
+	assert.False(t, plugin.PortPriority(3080))
+	assert.False(t, plugin.PortPriority(80))
 }

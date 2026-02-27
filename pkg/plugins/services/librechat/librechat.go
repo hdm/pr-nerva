@@ -257,34 +257,24 @@ func detectViaAPIConfig(client *http.Client, baseURL string) (bool, error) {
 		return false, nil
 	}
 
-	// Check for LibreChat-specific fields
-	// LibreChat /api/config typically has: registration, socialLoginEnabled, emailLoginEnabled
-	hasRegistration := false
-	hasSocialLogin := false
-	hasEmailLogin := false
-
-	if _, ok := config["registration"]; ok {
-		hasRegistration = true
-	}
-	if _, ok := config["socialLoginEnabled"]; ok {
-		hasSocialLogin = true
-	}
-	if _, ok := config["emailLoginEnabled"]; ok {
-		hasEmailLogin = true
+	// Check for LibreChat-specific fields in /api/config response.
+	// Generic fields like "registration" or "socialLoginEnabled" appear in many apps,
+	// so we require fields that are distinctive to LibreChat's config schema.
+	libreChatFields := []string{
+		"endpoints",
+		"modelSpecs",
+		"checkBalance",
+		"interfaceConfig",
 	}
 
-	// If at least 2 out of 3 LibreChat-specific fields exist, likely LibreChat
 	matchCount := 0
-	if hasRegistration {
-		matchCount++
-	}
-	if hasSocialLogin {
-		matchCount++
-	}
-	if hasEmailLogin {
-		matchCount++
+	for _, field := range libreChatFields {
+		if _, ok := config[field]; ok {
+			matchCount++
+		}
 	}
 
+	// Require at least 2 LibreChat-specific fields to reduce false positives
 	return matchCount >= 2, nil
 }
 
@@ -318,9 +308,10 @@ func (p *LibreChatPlugin) Run(conn net.Conn, timeout time.Duration, target plugi
 	baseURL := fmt.Sprintf("http://%s", conn.RemoteAddr().String())
 
 	// Phase 1: Primary detection via JS bundle VERSION extraction
+	// Errors here (e.g. connection reset) are non-fatal; fall through to Phase 2
 	version, configVersion, detected, err := detectViaJSBundle(client, baseURL)
 	if err != nil {
-		return nil, err
+		detected = false
 	}
 
 	// Phase 2: Fallback/enrichment via /api/config
@@ -329,6 +320,7 @@ func (p *LibreChatPlugin) Run(conn net.Conn, timeout time.Duration, target plugi
 			detected = true
 			// No exact version from /api/config, but product confirmed
 			version = ""
+			configVersion = ""
 		}
 	}
 
@@ -371,15 +363,20 @@ func (p *LibreChatTLSPlugin) Run(conn net.Conn, timeout time.Duration, target pl
     client := createHTTPClient(conn, timeout)
     baseURL := fmt.Sprintf("http://%s", conn.RemoteAddr().String())
 
+    // Phase 1: Primary detection via JS bundle VERSION extraction
+    // Errors here (e.g. connection reset) are non-fatal; fall through to Phase 2
     version, configVersion, detected, err := detectViaJSBundle(client, baseURL)
     if err != nil {
-            return nil, err
+            detected = false
     }
 
+    // Phase 2: Fallback/enrichment via /api/config
     if !detected {
             if apiConfigDetected, _ := detectViaAPIConfig(client, baseURL); apiConfigDetected {
                     detected = true
+                    // No exact version from /api/config, but product confirmed
                     version = ""
+                    configVersion = ""
             }
     }
 
