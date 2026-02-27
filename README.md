@@ -1,8 +1,8 @@
-<img width="2976" height="1440" alt="Nerva - Fast service fingerprinting CLI for network reconnaissance supporting 120+ protocols" src="https://github.com/user-attachments/assets/66f38a0c-dd23-42b6-9121-16fb2296f752" />
+<img width="2976" height="1440" alt="Nerva - Fast service fingerprinting CLI for network reconnaissance supporting 120+ protocols" src="https://github.com/user-attachments/assets/8bb40a77-a2cf-42a2-acbb-195a36623e00" />
 <h1 align="center">
   Nerva
   <br>
-  <sub>Fast Service Fingerprinting CLI</sub>
+  <sub>Nerva: Fast Service Fingerprinting CLI</sub>
 </h1>
 
 <p align="center">
