@@ -296,7 +296,9 @@ func TestBuildWeaviateCPE(t *testing.T) {
 }
 
 func TestWeaviateFingerprinter_Integration(t *testing.T) {
-	// Clear registry
+	// Save and restore the global registry to avoid flaky parallel tests
+	originalFingerprinters := httpFingerprinters
+	t.Cleanup(func() { httpFingerprinters = originalFingerprinters })
 	httpFingerprinters = nil
 
 	// Register should work via init() but test explicitly
