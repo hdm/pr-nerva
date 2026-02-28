@@ -241,6 +241,13 @@ func TestBuildTengineCPE(t *testing.T) {
 }
 
 func TestTengineFingerprinter_Integration(t *testing.T) {
+	// Save current registry state before modifying and restore after test
+	originalCount := len(GetFingerprinters())
+	t.Cleanup(func() {
+		// Restore registry to original state by removing what we added
+		httpFingerprinters = httpFingerprinters[:originalCount]
+	})
+
 	// Register the fingerprinter (should happen in init(), but we test it anyway)
 	fp := &TengineFingerprinter{}
 	Register(fp)
