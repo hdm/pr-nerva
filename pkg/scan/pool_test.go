@@ -488,3 +488,37 @@ func TestScanPool_Reuse(t *testing.T) {
 		t.Errorf("second run: expected failed==0, got %d", failed2)
 	}
 }
+
+// TestScanPool_VerboseProgress exercises the progress ticker (verbose mode).
+// The test verifies that a ScanPool with Verbose: true successfully exercises
+// the startProgressTicker code path and completes all targets.
+func TestScanPool_VerboseProgress(t *testing.T) {
+	t.Parallel()
+
+	fn := func(target plugins.Target) ([]plugins.Service, error) {
+		time.Sleep(250 * time.Millisecond)
+		return []plugins.Service{{IP: target.Address.Addr().String(), Port: int(target.Address.Port())}}, nil
+	}
+
+	pool := NewScanPool(Config{Workers: 2, Verbose: true})
+	targets := makeTargets(10)
+
+	results, err := pool.Run(context.Background(), targets, fn)
+
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if len(results) != 10 {
+		t.Errorf("expected 10 results, got %d", len(results))
+	}
+
+	completed := pool.completed.Load()
+	failed := pool.failed.Load()
+
+	if completed != 10 {
+		t.Errorf("expected completed==10, got %d", completed)
+	}
+	if failed != 0 {
+		t.Errorf("expected failed==0, got %d", failed)
+	}
+}
