@@ -94,6 +94,7 @@ const (
 	ProtoLDAP             = "ldap"
 	ProtoLDAPS            = "ldaps"
 	ProtoLibreChat        = "librechat"
+	ProtoM2UA             = "m2ua"
 	ProtoM3UA             = "m3ua"
 	ProtoMegaco           = "megaco"
 	ProtoMGCP             = "mgcp"
@@ -153,6 +154,7 @@ const (
 	ProtoSSH              = "ssh"
 	ProtoSSTP             = "sstp"
 	ProtoStun             = "stun"
+	ProtoSUA              = "sua"
 	ProtoSVN              = "svn"
 	ProtoSybase           = "sybase"
 	ProtoTelnet           = "telnet"
@@ -446,8 +448,16 @@ func (e Service) Metadata() Metadata {
 		var p ServiceLibreChat
 		_ = json.Unmarshal(e.Raw, &p)
 		return p
+	case ProtoM2UA:
+		var p ServiceM2UA
+		_ = json.Unmarshal(e.Raw, &p)
+		return p
 	case ProtoM3UA:
 		var p ServiceM3UA
+		_ = json.Unmarshal(e.Raw, &p)
+		return p
+	case ProtoSUA:
+		var p ServiceSUA
 		_ = json.Unmarshal(e.Raw, &p)
 		return p
 	case ProtoSSH:
@@ -1649,6 +1659,15 @@ type ServiceRMI struct {
 
 func (e ServiceRMI) Type() string { return ProtoRMI }
 
+type ServiceM2UA struct {
+	InfoString   string `json:"infoString,omitempty"`
+	ErrorCode    uint32 `json:"errorCode,omitempty"`
+	MessageClass uint8  `json:"messageClass,omitempty"`
+	MessageType  uint8  `json:"messageType,omitempty"`
+}
+
+func (e ServiceM2UA) Type() string { return ProtoM2UA }
+
 type ServiceM3UA struct {
 	InfoString   string `json:"infoString,omitempty"`
 	ErrorCode    uint32 `json:"errorCode,omitempty"`
@@ -1657,6 +1676,15 @@ type ServiceM3UA struct {
 }
 
 func (e ServiceM3UA) Type() string { return ProtoM3UA }
+
+type ServiceSUA struct {
+	InfoString   string `json:"infoString,omitempty"`
+	ErrorCode    uint32 `json:"errorCode,omitempty"`
+	MessageClass uint8  `json:"messageClass,omitempty"`
+	MessageType  uint8  `json:"messageType,omitempty"`
+}
+
+func (e ServiceSUA) Type() string { return ProtoSUA }
 
 type ServiceActiveMQOpenWire struct {
 	Version int      `json:"version,omitempty"` // OpenWire protocol version (1-12)
