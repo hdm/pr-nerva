@@ -72,12 +72,13 @@ func readTargets(inputFile string, verbose bool) ([]plugins.Target, error) {
 
 func parseTarget(inputTarget string) (plugins.Target, error) {
 	scanTarget := plugins.Target{}
-	target := strings.Split(strings.TrimSpace(inputTarget), ":")
-	if len(target) != 2 {
+	trimmed := strings.TrimSpace(inputTarget)
+
+	// Use net.SplitHostPort to properly handle IPv6 addresses in [IPv6]:port format
+	hostStr, portStr, err := net.SplitHostPort(trimmed)
+	if err != nil {
 		return plugins.Target{}, fmt.Errorf("invalid target: %s", inputTarget)
 	}
-
-	hostStr, portStr := target[0], target[1]
 
 	port, err := strconv.ParseUint(portStr, 10, 16)
 	if err != nil {
