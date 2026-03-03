@@ -437,3 +437,54 @@ func TestScanPool_ProgressCounters(t *testing.T) {
 			completed, failed, total, completed+failed)
 	}
 }
+
+// TestScanPool_Reuse verifies that a ScanPool can be reused for multiple Run calls
+// and that counters are reset between runs (proving the counter reset logic works).
+func TestScanPool_Reuse(t *testing.T) {
+	t.Parallel()
+
+	fn := func(target plugins.Target) ([]plugins.Service, error) {
+		return []plugins.Service{{IP: target.Address.Addr().String(), Port: int(target.Address.Port())}}, nil
+	}
+
+	pool := NewScanPool(Config{Workers: 5})
+
+	// First run with 10 targets
+	targets1 := makeTargets(10)
+	results1, err := pool.Run(context.Background(), targets1, fn)
+	if err != nil {
+		t.Fatalf("first run: expected no error, got: %v", err)
+	}
+	if len(results1) != 10 {
+		t.Errorf("first run: expected 10 results, got %d", len(results1))
+	}
+
+	completed1 := pool.completed.Load()
+	failed1 := pool.failed.Load()
+	if completed1 != 10 {
+		t.Errorf("first run: expected completed==10, got %d", completed1)
+	}
+	if failed1 != 0 {
+		t.Errorf("first run: expected failed==0, got %d", failed1)
+	}
+
+	// Second run with 5 different targets — counters should reset
+	targets2 := makeTargets(5)
+	results2, err := pool.Run(context.Background(), targets2, fn)
+	if err != nil {
+		t.Fatalf("second run: expected no error, got: %v", err)
+	}
+	if len(results2) != 5 {
+		t.Errorf("second run: expected 5 results, got %d", len(results2))
+	}
+
+	// After second run, counters should be 5 and 0, NOT 15 and 0 (proves reset worked)
+	completed2 := pool.completed.Load()
+	failed2 := pool.failed.Load()
+	if completed2 != 5 {
+		t.Errorf("second run: expected completed==5 (not 15), got %d — counters were not reset", completed2)
+	}
+	if failed2 != 0 {
+		t.Errorf("second run: expected failed==0, got %d", failed2)
+	}
+}
