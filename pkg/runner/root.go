@@ -15,8 +15,11 @@
 package runner
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/spf13/cobra"
 
@@ -42,12 +45,15 @@ var (
 				return configErr
 			}
 
+			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+			defer stop()
+
 			targetsList, err := readTargets(inputFile, config.verbose)
 			if err != nil {
 				return err
 			}
 
-			results, err := scan.ScanTargets(targetsList, createScanConfig(config))
+			results, err := scan.ScanTargets(ctx, targetsList, createScanConfig(config))
 			if err != nil {
 				return fmt.Errorf("Failed running ScanTargets (%w)", err)
 			}
@@ -81,6 +87,9 @@ func init() {
 	rootCmd.PersistentFlags().BoolVarP(&config.verbose, "verbose", "v", false, "verbose mode")
 	rootCmd.PersistentFlags().
 		IntVarP(&config.timeout, "timeout", "w", 2000, "timeout (milliseconds)")
+	rootCmd.PersistentFlags().IntVarP(&config.workers, "workers", "W", 50, "number of concurrent scan workers")
+	rootCmd.PersistentFlags().IntVarP(&config.maxHostConn, "max-host-conn", "H", 5, "max concurrent connections per host IP (0=unlimited)")
+	rootCmd.PersistentFlags().Float64VarP(&config.rateLimit, "rate-limit", "R", 0, "max scans per second (0=unlimited)")
 	rootCmd.PersistentFlags().BoolVarP(&config.showCapabilities, "capabilities", "c", false, "list available capabilities and exit")
 }
 

@@ -33,4 +33,13 @@ type Config struct {
 
 	// Prints logging messages to stderr
 	Verbose bool
+
+	// Number of concurrent scan workers (default 50, minimum 1)
+	Workers int
+
+	// Max concurrent connections per host IP (0 = unlimited)
+	MaxHostConn int
+
+	// Max scans per second globally (0 = unlimited)
+	RateLimit float64
 }

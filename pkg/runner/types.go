@@ -26,4 +26,7 @@ type cliConfig struct {
 	verbose          bool
 	showErrors       bool
 	showCapabilities bool
+	workers          int
+	maxHostConn      int
+	rateLimit        float64
 }
