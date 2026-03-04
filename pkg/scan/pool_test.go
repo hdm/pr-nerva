@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"net/netip"
+	"sort"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -588,5 +589,60 @@ func TestScanPool_VerboseProgress(t *testing.T) {
 	}
 	if failed != 0 {
 		t.Errorf("expected failed==0, got %d", failed)
+	}
+}
+
+// TestScanPool_SequentialParallelAccuracy validates that sequential (Workers=1) and
+// parallel (Workers=50) runs produce identical results for the same set of targets and
+// a deterministic scan function. This guards against races or dropped results that would
+// only appear under parallel execution.
+func TestScanPool_SequentialParallelAccuracy(t *testing.T) {
+	t.Parallel()
+
+	targets := makeTargets(100)
+
+	scanFunc := func(target plugins.Target) ([]plugins.Service, error) {
+		return []plugins.Service{{
+			IP:       target.Address.Addr().String(),
+			Port:     int(target.Address.Port()),
+			Protocol: "mock",
+		}}, nil
+	}
+
+	seqPool := NewScanPool(Config{Workers: 1})
+	sequential, err := seqPool.Run(context.Background(), targets, scanFunc)
+	if err != nil {
+		t.Fatalf("sequential run: expected no error, got: %v", err)
+	}
+
+	parPool := NewScanPool(Config{Workers: 50})
+	parallel, err := parPool.Run(context.Background(), targets, scanFunc)
+	if err != nil {
+		t.Fatalf("parallel run: expected no error, got: %v", err)
+	}
+
+	if len(sequential) != 100 {
+		t.Errorf("sequential: expected 100 results, got %d", len(sequential))
+	}
+	if len(parallel) != 100 {
+		t.Errorf("parallel: expected 100 results, got %d", len(parallel))
+	}
+
+	sort.Slice(sequential, func(i, j int) bool {
+		return sequential[i].Port < sequential[j].Port
+	})
+	sort.Slice(parallel, func(i, j int) bool {
+		return parallel[i].Port < parallel[j].Port
+	})
+
+	for i := range sequential {
+		if sequential[i].IP != parallel[i].IP {
+			t.Errorf("result[%d]: IP mismatch: sequential=%s parallel=%s",
+				i, sequential[i].IP, parallel[i].IP)
+		}
+		if sequential[i].Port != parallel[i].Port {
+			t.Errorf("result[%d]: Port mismatch: sequential=%d parallel=%d",
+				i, sequential[i].Port, parallel[i].Port)
+		}
 	}
 }
