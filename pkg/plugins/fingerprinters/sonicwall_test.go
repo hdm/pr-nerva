@@ -132,16 +132,17 @@ func TestSonicWallFingerprinter_Fingerprint(t *testing.T) {
 	f := &SonicWallFingerprinter{}
 
 	tests := []struct {
-		name          string
-		statusCode    int
-		headers       http.Header
-		body          string
-		wantResult    bool
-		wantTech      string
-		wantVersion   string
-		wantCPEPrefix string
-		wantSSLVPN    bool
-		wantModel     string
+		name               string
+		statusCode         int
+		headers            http.Header
+		body               string
+		wantResult         bool
+		wantTech           string
+		wantVersion        string
+		wantCPEPrefix      string
+		wantSSLVPN         bool
+		wantModel          string
+		wantMgmtInterface  string
 	}{
 		{
 			name:       "detects SonicWall from Server header with SSL VPN body",
@@ -375,6 +376,37 @@ func TestSonicWallFingerprinter_Fingerprint(t *testing.T) {
 			wantVersion: "6.2.5",
 			wantTech:    "sonicwall",
 		},
+		{
+			name:              "detects web-admin from admin frameset page",
+			statusCode:        200,
+			headers:           http.Header{"Server": []string{"SonicWALL"}},
+			body:              `<frameset rows="*,1"><frame src="auth1.html" name="authFrm"></frameset>`,
+			wantResult:        true,
+			wantTech:          "sonicwall",
+			wantMgmtInterface: "web-admin",
+		},
+		{
+			name:       "detects SonicOS 7.x from redirect to sonicui with version extraction",
+			statusCode: 302,
+			headers: http.Header{
+				"Server":   []string{"SonicWALL"},
+				"Location": []string{"https://10.0.0.1/sonicui/7/login/"},
+			},
+			body:              `<BODY onLoad="location.href = 'https://10.0.0.1/sonicui/7/login/';">`,
+			wantResult:        true,
+			wantVersion:       "7",
+			wantTech:          "sonicwall",
+			wantMgmtInterface: "web-admin",
+		},
+		{
+			name:              "defaults to web-admin with Server header and empty body",
+			statusCode:        200,
+			headers:           http.Header{"Server": []string{"SonicWALL"}},
+			body:              ``,
+			wantResult:        true,
+			wantTech:          "sonicwall",
+			wantMgmtInterface: "web-admin",
+		},
 	}
 
 	for _, tt := range tests {
@@ -420,6 +452,11 @@ func TestSonicWallFingerprinter_Fingerprint(t *testing.T) {
 				if tt.wantModel != "" {
 					if model, ok := result.Metadata["productModel"]; !ok || model != tt.wantModel {
 						t.Errorf("productModel = %q, want %q", model, tt.wantModel)
+					}
+				}
+				if tt.wantMgmtInterface != "" {
+					if mgmt, ok := result.Metadata["managementInterface"]; !ok || mgmt != tt.wantMgmtInterface {
+						t.Errorf("managementInterface = %q, want %q", mgmt, tt.wantMgmtInterface)
 					}
 				}
 			}
@@ -806,6 +843,23 @@ var sslvpnSvcObj = new serviceObj('SSLVPN',1,11293,6,4433,4433,0);
 			wantTech:    "sonicwall",
 			wantVersion: "6.2.5",
 		},
+		{
+			name:        "Shodan Vector 9: SonicOS 7.x redirect to sonicui",
+			description: "SonicOS 7.x device returning 302 redirect to /sonicui/7/login/ (68.15.167.207 pattern)",
+			statusCode:  302,
+			headers: http.Header{
+				"Server":       []string{"SonicWALL"},
+				"Content-Type": []string{"text/html;charset=UTF-8"},
+				"Location":     []string{"https://68.15.167.207/sonicui/7/login/"},
+			},
+			body: `<HTML><HEAD><TITLE>Page Redirecting</TITLE>
+<META HTTP-EQUIV="Pragma" CONTENT="no-cache">
+</HEAD><BODY onLoad="location.href = 'https://68.15.167.207/sonicui/7/login/';">
+This page is redirecting! Click <A HREF="https://68.15.167.207/sonicui/7/login/">here</A>
+</BODY></HTML>`,
+			wantTech:    "sonicwall",
+			wantVersion: "7",
+		},
 	}
 
 	for _, tt := range tests {
@@ -914,6 +968,11 @@ func TestExtractSonicWallVersion(t *testing.T) {
 			name: "extracts version from CSS filename with (eng) suffix",
 			body: `<link href="swl_login-6.2.5-4163414724(eng).css" rel="stylesheet">`,
 			want: "6.2.5",
+		},
+		{
+			name: "extracts major version from sonicui URL in body",
+			body: `location.href = '/sonicui/7/login/';`,
+			want: "7",
 		},
 	}
 

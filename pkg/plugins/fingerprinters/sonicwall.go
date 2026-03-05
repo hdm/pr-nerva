@@ -46,8 +46,8 @@ func init() {
 }
 
 // sonicWallVersionRegex validates SonicOS version format (prevents CPE injection).
-// Accepts: 7.0.1, 6.5.4.4, 7.1.1-7040, 6.5.4.15-116n
-var sonicWallVersionRegex = regexp.MustCompile(`^[0-9]+(?:\.[0-9]+){1,4}(?:-[0-9a-zA-Z]+)?$`)
+// Accepts: 7, 7.0.1, 6.5.4.4, 7.1.1-7040, 6.5.4.15-116n
+var sonicWallVersionRegex = regexp.MustCompile(`^[0-9]+(?:\.[0-9]+){0,4}(?:-[0-9a-zA-Z]+)?$`)
 
 // SonicOS version extraction patterns from response body
 var (
@@ -70,6 +70,8 @@ var (
 	sonicWallNEVersionPattern = regexp.MustCompile(`nelaunchxpsversion\s*=\s*"(\d+\.\d+\.\d+\.\d+)"`)
 	// Matches NetExtender download URL: /netextender/plugin/7.0/npNELaunch.xpi
 	sonicWallNEURLPattern = regexp.MustCompile(`/netextender/plugin/(\d+\.\d+)/`)
+	// Matches SonicUI version in redirect URL: /sonicui/7/login/ or /sonicui/7/m/mgmt/
+	sonicWallUIVersionPattern = regexp.MustCompile(`/sonicui/(\d+)(?:/|$)`)
 )
 
 // SonicWall product model patterns
@@ -89,6 +91,7 @@ var sonicWallBodyPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)sslvpnLogin`),
 	regexp.MustCompile(`(?i)auth1\.html.*authFrm`),
 	regexp.MustCompile(`nelaunchxpsversion`),
+	regexp.MustCompile(`(?i)/sonicui/`),
 }
 
 func (f *SonicWallFingerprinter) Name() string {
@@ -162,6 +165,15 @@ func (f *SonicWallFingerprinter) Fingerprint(resp *http.Response, body []byte) (
 	// Extract version from body
 	version := extractSonicWallVersion(body)
 
+	// Try extracting version from Location header (SonicOS 7.x redirects to /sonicui/7/login/)
+	if version == "" {
+		if loc := resp.Header.Get("Location"); loc != "" {
+			if matches := sonicWallUIVersionPattern.FindStringSubmatch(loc); len(matches) > 1 {
+				version = matches[1]
+			}
+		}
+	}
+
 	// Validate version format if present (prevent CPE injection)
 	if version != "" && !sonicWallVersionRegex.MatchString(version) {
 		version = "" // Invalid format, discard
@@ -177,8 +189,15 @@ func (f *SonicWallFingerprinter) Fingerprint(resp *http.Response, body []byte) (
 		metadata["sslVPN"] = true
 	}
 
+	// Check Location header for SonicOS 7.x management redirect
+	locationHeader := resp.Header.Get("Location")
+	if strings.Contains(locationHeader, "/sonicui/") || strings.Contains(bodyStr, "/sonicui/") {
+		metadata["managementInterface"] = "web-admin"
+	}
+
 	// Detect management interface type
-	if strings.Contains(bodyStr, "/cgi-bin/welcome") || strings.Contains(bodyStr, "managementLogin") {
+	if strings.Contains(bodyStr, "/cgi-bin/welcome") || strings.Contains(bodyStr, "managementLogin") ||
+		strings.Contains(bodyStr, "auth1.html") || strings.Contains(bodyStr, "authFrm") {
 		metadata["managementInterface"] = "web-admin"
 	}
 	if strings.Contains(bodyStr, "sslvpn") || strings.Contains(bodyStr, "NetExtender") ||
@@ -190,6 +209,13 @@ func (f *SonicWallFingerprinter) Fingerprint(resp *http.Response, body []byte) (
 	if strings.Contains(bodyStr, "/api/sonicos") || strings.Contains(bodyStr, "sonicos_api") ||
 		strings.Contains(bodyStr, `"status"`) && strings.Contains(bodyStr, `"sonicos"`) {
 		metadata["managementInterface"] = "rest-api"
+	}
+
+	// Default to web-admin if we detected SonicWall but couldn't determine specific interface
+	if _, ok := metadata["managementInterface"]; !ok {
+		if headerMatch {
+			metadata["managementInterface"] = "web-admin"
+		}
 	}
 
 	result := &FingerprintResult{
@@ -240,6 +266,11 @@ func extractSonicWallVersion(body []byte) string {
 	// Fallback: NetExtender download URL version
 	// e.g., /netextender/plugin/7.0/npNELaunch.xpi
 	if matches := sonicWallNEURLPattern.FindSubmatch(body); len(matches) > 1 {
+		return string(matches[1])
+	}
+
+	// Fallback: SonicUI version from URL path in body (e.g., /sonicui/7/login/)
+	if matches := sonicWallUIVersionPattern.FindSubmatch(body); len(matches) > 1 {
 		return string(matches[1])
 	}
 
