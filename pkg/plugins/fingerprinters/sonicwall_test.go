@@ -28,8 +28,8 @@ func TestSonicWallFingerprinter_Name(t *testing.T) {
 
 func TestSonicWallFingerprinter_ProbeEndpoint(t *testing.T) {
 	f := &SonicWallFingerprinter{}
-	if endpoint := f.ProbeEndpoint(); endpoint != "/cgi-bin/welcome" {
-		t.Errorf("ProbeEndpoint() = %q, expected %q", endpoint, "/cgi-bin/welcome")
+	if endpoint := f.ProbeEndpoint(); endpoint != "/auth1.html" {
+		t.Errorf("ProbeEndpoint() = %q, expected %q", endpoint, "/auth1.html")
 	}
 }
 
@@ -363,6 +363,17 @@ func TestSonicWallFingerprinter_Fingerprint(t *testing.T) {
 			wantResult: true,
 			wantTech:   "sonicwall",
 			wantSSLVPN: true,
+		},
+		{
+			name:       "extracts version from JS filename with language suffix",
+			statusCode: 200,
+			headers:    http.Header{"Server": []string{"SonicWALL"}},
+			body: `<link href="swl_login-6.2.5-4163414724(eng).css" rel="stylesheet">
+<script src="auth-6.2.5-2996728830(eng).js"></script>
+<title>Dell SonicWALL - Authentication</title>`,
+			wantResult:  true,
+			wantVersion: "6.2.5",
+			wantTech:    "sonicwall",
 		},
 	}
 
@@ -776,6 +787,25 @@ var sslvpnSvcObj = new serviceObj('SSLVPN',1,11293,6,4433,4433,0);
 			wantVersion: "7.0.1-5058",
 			wantModel:   "TZ 470",
 		},
+		{
+			name:        "Shodan Vector 8: Admin interface with (eng) JS/CSS filenames",
+			description: "Real SonicWall admin interface (204.122.20.22 style) with language-suffixed asset filenames",
+			statusCode:  200,
+			headers: http.Header{
+				"Server": []string{"SonicWALL"},
+			},
+			body: `<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN">
+<html><head>
+<meta name="id" content="auth1">
+<link href="swl_login-6.2.5-4163414724(eng).css" rel="stylesheet" type="text/css">
+<title>Dell SonicWALL - Authentication</title>
+<script type="text/JavaScript" src="jquery-6.2.5-3031828635(eng).js"></script>
+<script type="text/JavaScript" src="cookies-6.2.5-1331366947(eng).js"></script>
+<script type="text/JavaScript" src="md5-6.2.5-4190932482(eng).js"></script>
+<script type="text/JavaScript" src="auth-6.2.5-2996728830(eng).js"></script>`,
+			wantTech:    "sonicwall",
+			wantVersion: "6.2.5",
+		},
 	}
 
 	for _, tt := range tests {
@@ -874,6 +904,16 @@ func TestExtractSonicWallVersion(t *testing.T) {
 			name: "no version found",
 			body: "Welcome to SonicWall",
 			want: "",
+		},
+		{
+			name: "extracts version from JS filename with (eng) suffix",
+			body: `<script src="auth-6.2.5-2996728830(eng).js"></script>`,
+			want: "6.2.5",
+		},
+		{
+			name: "extracts version from CSS filename with (eng) suffix",
+			body: `<link href="swl_login-6.2.5-4163414724(eng).css" rel="stylesheet">`,
+			want: "6.2.5",
 		},
 	}
 

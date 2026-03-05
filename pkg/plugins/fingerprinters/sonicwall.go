@@ -28,7 +28,8 @@ import (
 // Detection uses multiple signals:
 //
 //  1. Server Header: "SonicWALL" in Server header (definitive indicator)
-//  2. Login Page: /cgi-bin/welcome — SonicWall-specific login page patterns
+//  2. Login Page: /auth1.html — works on both SSL-VPN portals and admin interfaces,
+//     contains version-bearing JS/CSS asset filenames in the response body
 //  3. API Endpoint: /api/sonicos — SonicOS REST API responses with version info
 //  4. Body Patterns: SonicWall branding, NetExtender/Virtual Office references,
 //     SonicOS version strings, product model identifiers
@@ -59,10 +60,12 @@ var (
 
 	// Real-world patterns from live SonicWall devices:
 	// Matches JS asset filenames: auth-5.0.0-2655861013.js, md5-5.0.0-4190932482.js
+	// Also handles language-suffix variants: auth-6.2.5-2996728830(eng).js
 	// The "o" suffix (e.g., "5.0o") is a build variant marker and is stripped.
-	sonicWallJSVersionPattern = regexp.MustCompile(`(?:auth|md5|browserCheck|jquery|cookies)-(\d+\.\d+(?:\.\d+)?)o?-\d+\.js`)
+	sonicWallJSVersionPattern = regexp.MustCompile(`(?:auth|md5|browserCheck|jquery|cookies)-(\d+\.\d+(?:\.\d+)?)o?-\d+(?:\([a-z]+\))?\.js`)
 	// Matches CSS asset filenames: swl_login-5.0o-586369509.css
-	sonicWallCSSVersionPattern = regexp.MustCompile(`swl_login-(\d+\.\d+(?:\.\d+)?)o?-\d+\.css`)
+	// Also handles language-suffix variants: swl_login-6.2.5-4163414724(eng).css
+	sonicWallCSSVersionPattern = regexp.MustCompile(`swl_login-(\d+\.\d+(?:\.\d+)?)o?-\d+(?:\([a-z]+\))?\.css`)
 	// Matches NetExtender version variable: var nelaunchxpsversion = "7.0.0.107";
 	sonicWallNEVersionPattern = regexp.MustCompile(`nelaunchxpsversion\s*=\s*"(\d+\.\d+\.\d+\.\d+)"`)
 	// Matches NetExtender download URL: /netextender/plugin/7.0/npNELaunch.xpi
@@ -93,7 +96,7 @@ func (f *SonicWallFingerprinter) Name() string {
 }
 
 func (f *SonicWallFingerprinter) ProbeEndpoint() string {
-	return "/cgi-bin/welcome"
+	return "/auth1.html"
 }
 
 func (f *SonicWallFingerprinter) Match(resp *http.Response) bool {
