@@ -46,7 +46,7 @@ func init() {
 
 // sonicWallVersionRegex validates SonicOS version format (prevents CPE injection).
 // Accepts: 7.0.1, 6.5.4.4, 7.1.1-7040, 6.5.4.15-116n
-var sonicWallVersionRegex = regexp.MustCompile(`^[0-9]+(?:\.[0-9]+){2,4}(?:-[0-9a-zA-Z]+)?$`)
+var sonicWallVersionRegex = regexp.MustCompile(`^[0-9]+(?:\.[0-9]+){1,4}(?:-[0-9a-zA-Z]+)?$`)
 
 // SonicOS version extraction patterns from response body
 var (
@@ -56,6 +56,17 @@ var (
 	sonicWallFirmwarePattern = regexp.MustCompile(`(?i)firmware[_-]version[=:]["']?\s*([0-9]+(?:\.[0-9]+){2,4}(?:-[0-9a-zA-Z]+)?)`)
 	// Matches: "firmware_version":"7.0.1-5035" in SonicOS API JSON responses
 	sonicOSAPIVersionPattern = regexp.MustCompile(`(?i)"firmware_version"\s*:\s*"([0-9]+(?:\.[0-9]+){2,4}(?:-[0-9a-zA-Z]+)?)"`)
+
+	// Real-world patterns from live SonicWall devices:
+	// Matches JS asset filenames: auth-5.0.0-2655861013.js, md5-5.0.0-4190932482.js
+	// The "o" suffix (e.g., "5.0o") is a build variant marker and is stripped.
+	sonicWallJSVersionPattern = regexp.MustCompile(`(?:auth|md5|browserCheck|jquery|cookies)-(\d+\.\d+(?:\.\d+)?)o?-\d+\.js`)
+	// Matches CSS asset filenames: swl_login-5.0o-586369509.css
+	sonicWallCSSVersionPattern = regexp.MustCompile(`swl_login-(\d+\.\d+(?:\.\d+)?)o?-\d+\.css`)
+	// Matches NetExtender version variable: var nelaunchxpsversion = "7.0.0.107";
+	sonicWallNEVersionPattern = regexp.MustCompile(`nelaunchxpsversion\s*=\s*"(\d+\.\d+\.\d+\.\d+)"`)
+	// Matches NetExtender download URL: /netextender/plugin/7.0/npNELaunch.xpi
+	sonicWallNEURLPattern = regexp.MustCompile(`/netextender/plugin/(\d+\.\d+)/`)
 )
 
 // SonicWall product model patterns
@@ -72,6 +83,9 @@ var sonicWallBodyPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)sslvpn/login`),
 	regexp.MustCompile(`(?i)/api/sonicos`),
 	regexp.MustCompile(`(?i)sonicos_api`),
+	regexp.MustCompile(`(?i)sslvpnLogin`),
+	regexp.MustCompile(`(?i)auth1\.html.*authFrm`),
+	regexp.MustCompile(`nelaunchxpsversion`),
 }
 
 func (f *SonicWallFingerprinter) Name() string {
@@ -137,6 +151,11 @@ func (f *SonicWallFingerprinter) Fingerprint(resp *http.Response, body []byte) (
 	metadata["vendor"] = "SonicWall"
 	metadata["product"] = "SonicWall Firewall"
 
+	// Detect DELL branding (older devices)
+	if strings.Contains(bodyStr, "DELL SonicWALL") || strings.Contains(bodyStr, "Dell SonicWALL") {
+		metadata["vendor"] = "Dell SonicWall"
+	}
+
 	// Extract version from body
 	version := extractSonicWallVersion(body)
 
@@ -197,6 +216,30 @@ func extractSonicWallVersion(body []byte) string {
 		return string(matches[1])
 	}
 
+	// Fallback: JS asset filename version (real SonicWall devices embed version in filenames)
+	// e.g., auth-5.0.0-2655861013.js, md5-5.0.0-4190932482.js
+	if matches := sonicWallJSVersionPattern.FindSubmatch(body); len(matches) > 1 {
+		return string(matches[1])
+	}
+
+	// Fallback: CSS asset filename version
+	// e.g., swl_login-5.0o-586369509.css (the "o" suffix is stripped by the regex)
+	if matches := sonicWallCSSVersionPattern.FindSubmatch(body); len(matches) > 1 {
+		return string(matches[1])
+	}
+
+	// Fallback: NetExtender version variable
+	// e.g., var nelaunchxpsversion = "7.0.0.107";
+	if matches := sonicWallNEVersionPattern.FindSubmatch(body); len(matches) > 1 {
+		return string(matches[1])
+	}
+
+	// Fallback: NetExtender download URL version
+	// e.g., /netextender/plugin/7.0/npNELaunch.xpi
+	if matches := sonicWallNEURLPattern.FindSubmatch(body); len(matches) > 1 {
+		return string(matches[1])
+	}
+
 	return ""
 }
 
@@ -217,6 +260,7 @@ func detectSonicWallSSLVPN(bodyStr string, headers http.Header) bool {
 		"SSL-VPN",
 		"SSLVPN",
 		"swl_portal",
+		"sslvpnLogin",
 	}
 	for _, pattern := range sslVPNPatterns {
 		if strings.Contains(bodyStr, pattern) {

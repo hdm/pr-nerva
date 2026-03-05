@@ -312,6 +312,58 @@ func TestSonicWallFingerprinter_Fingerprint(t *testing.T) {
 			body:       `<html><body>Download the NetExtender client from the vendor site</body></html>`,
 			wantResult: false,
 		},
+		{
+			name:       "extracts version from JS asset filename on real device",
+			statusCode: 200,
+			headers: http.Header{
+				"Server": []string{"SonicWALL SSL-VPN Web Server"},
+			},
+			body: `<html><head>
+<script src="md5-5.0.0-4190932482.js"></script>
+<script src="auth-5.0.0-2655861013.js"></script>
+</head><body></body></html>`,
+			wantResult:    true,
+			wantTech:      "sonicwall",
+			wantVersion:   "5.0.0",
+			wantCPEPrefix: "cpe:2.3:o:sonicwall:sonicos:5.0.0",
+		},
+		{
+			name:       "extracts version from CSS filename with o suffix",
+			statusCode: 200,
+			headers: http.Header{
+				"Server": []string{"SonicWALL"},
+			},
+			body: `<html><head>
+<link rel="stylesheet" href="swl_login-5.0o-586369509.css">
+<script src="auth-5.0o-1481342612.js"></script>
+</head><body></body></html>`,
+			wantResult:    true,
+			wantTech:      "sonicwall",
+			wantVersion:   "5.0",
+			wantCPEPrefix: "cpe:2.3:o:sonicwall:sonicos:5.0",
+		},
+		{
+			name:       "detects SSL-VPN from sslvpnLogin meta tag",
+			statusCode: 200,
+			headers: http.Header{
+				"Server": []string{"SonicWALL SSL-VPN Web Server"},
+			},
+			body:       `<html><head><meta name="id" content="sslvpnLogin"></head><body></body></html>`,
+			wantResult: true,
+			wantTech:   "sonicwall",
+			wantSSLVPN: true,
+		},
+		{
+			name:       "detects DELL branding",
+			statusCode: 200,
+			headers: http.Header{
+				"Server": []string{"SonicWALL SSL-VPN Web Server"},
+			},
+			body:       `<html><body>window.status="DELL SonicWALL - Virtual Office"</body></html>`,
+			wantResult: true,
+			wantTech:   "sonicwall",
+			wantSSLVPN: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -650,8 +702,59 @@ var model="SonicWall SuperMassive 9600";
 			wantModel:   "SuperMassive 9600",
 		},
 		{
-			name:        "Shodan Vector 5: SonicOS REST API JSON response",
-			description: "SonicOS REST API returning JSON with firmware version and model info",
+			name:        "Shodan Vector 5: Real SSL-VPN portal (31.141.236.4:4433 pattern)",
+			description: "Real SonicWall SSL-VPN portal with JS asset versioning and NetExtender",
+			statusCode:  200,
+			headers: http.Header{
+				"Server":       []string{"SonicWALL SSL-VPN Web Server"},
+				"Content-Type": []string{"text/html; charset=UTF-8"},
+			},
+			body: `<!DOCTYPE html>
+<html><head>
+<meta name="id" content="sslvpnLogin">
+<script src="md5-5.0.0-4190932482.js"></script>
+<script src="auth-5.0.0-2655861013.js"></script>
+<script src="browserCheck-5.0.0-2410815703.js"></script>
+<link rel="stylesheet" href="swl_login-5.0.0-3029498498.css">
+</head><body>
+<script>
+window.status="DELL SonicWALL - Virtual Office - Powered by SonicWALL, Inc.";
+var nelaunchxpsversion = "7.0.0.107";
+var sslvpnSvcObj = new serviceObj('SSLVPN',1,11293,6,4433,4433,0);
+</script>
+<form method="POST" action="/cgi-bin/welcome">
+<input name="uName" type="text">
+<input name="pass" type="password">
+</form>
+<a href="https://software.sonicwall.com/applications/netextender/plugin/7.0/npNELaunch.xpi">NetExtender</a>
+</body></html>`,
+			wantTech:    "sonicwall",
+			wantVersion: "5.0.0",
+			wantSSLVPN:  true,
+		},
+		{
+			name:        "Shodan Vector 6: Real admin frameset (72.211.43.91 pattern)",
+			description: "Real SonicWall admin interface with frameset loading auth1.html",
+			statusCode:  200,
+			headers: http.Header{
+				"Server":       []string{"SonicWALL"},
+				"Content-Type": []string{"text/html"},
+			},
+			body: `<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<html><head><title>SonicWALL</title>
+<link rel="stylesheet" href="swl_login-5.0o-586369509.css">
+<script src="auth-5.0o-1481342612.js"></script>
+</head>
+<frameset rows="*,1">
+<frame src="auth1.html" name="authFrm">
+<frame src="about:blank" name="hiddenFrm">
+</frameset></html>`,
+			wantTech:    "sonicwall",
+			wantVersion: "5.0",
+		},
+		{
+			name:        "Shodan Vector 7: SonicOS REST API JSON response",
+			description: "SonicOS REST API returning JSON with firmware version and model",
 			statusCode:  200,
 			headers: http.Header{
 				"Server":                    []string{"SonicWALL"},
@@ -741,6 +844,31 @@ func TestExtractSonicWallVersion(t *testing.T) {
 			name: "extracts version from API JSON response",
 			body: `{"sonicos":{"firmware_version":"7.0.1-5058"}}`,
 			want: "7.0.1-5058",
+		},
+		{
+			name: "extracts version from JS asset filename",
+			body: `<script src="auth-5.0.0-2655861013.js"></script>`,
+			want: "5.0.0",
+		},
+		{
+			name: "extracts version from CSS asset filename with o suffix",
+			body: `<link href="swl_login-5.0o-586369509.css" rel="stylesheet">`,
+			want: "5.0",
+		},
+		{
+			name: "extracts NetExtender version variable",
+			body: `var nelaunchxpsversion = "7.0.0.107";`,
+			want: "7.0.0.107",
+		},
+		{
+			name: "extracts version from NetExtender download URL",
+			body: `https://software.sonicwall.com/applications/netextender/plugin/7.0/npNELaunch.xpi`,
+			want: "7.0",
+		},
+		{
+			name: "prefers SonicOS version over JS filename version",
+			body: `SonicOS 7.0.1 <script src="auth-5.0.0-123.js"></script>`,
+			want: "7.0.1",
 		},
 		{
 			name: "no version found",
@@ -840,6 +968,12 @@ func TestDetectSonicWallSSLVPN(t *testing.T) {
 				"Set-Cookie": []string{"swap=abc123; path=/; secure"},
 			},
 			want: true,
+		},
+		{
+			name:    "detects sslvpnLogin meta tag",
+			body:    `<meta name="id" content="sslvpnLogin">`,
+			headers: http.Header{},
+			want:    true,
 		},
 		{
 			name:    "no SSL-VPN indicators",
