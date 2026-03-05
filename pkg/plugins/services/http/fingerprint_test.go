@@ -174,6 +174,12 @@ func TestFingerprintPipeline_Integration(t *testing.T) {
 			CPEs:       []string{"cpe:2.3:a:nginx:nginx:1.24.0:*:*:*:*:*:*:*"},
 			Metadata:   nil,
 		},
+		{
+			Technology: "",
+			Version:    "1.0.0",
+			CPEs:       []string{"cpe:2.3:a:unknown:unknown:1.0.0:*:*:*:*:*:*:*"},
+			Metadata:   map[string]any{"should": "be-ignored"},
+		},
 	}
 
 	var technologies []string
@@ -182,25 +188,25 @@ func TestFingerprintPipeline_Integration(t *testing.T) {
 
 	for _, result := range mockResults {
 		tech, resultCPEs, metadata := processFingerprintResult(result)
-		if tech != "" {
+		if result.Technology != "" { // Guard on raw technology, not formatted
 			technologies = append(technologies, tech)
 		}
 		cpes = append(cpes, resultCPEs...)
-		if metadata != nil {
+		if metadata != nil && result.Technology != "" {
 			fingerprintMetadata[result.Technology] = metadata
 		}
 	}
 
-	// Verify technologies include versions
+	// Verify technologies include versions (empty tech should be skipped)
 	assert.Contains(t, technologies, "kubernetes:1.29.0")
 	assert.Contains(t, technologies, "nginx:1.24.0")
-	assert.Len(t, technologies, 2)
+	assert.Len(t, technologies, 2) // Still 2, empty tech skipped
 
-	// Verify CPEs are collected
-	assert.Len(t, cpes, 2)
+	// Verify CPEs are collected (including from empty tech - CPEs are separate)
+	assert.Len(t, cpes, 3)
 
-	// Verify metadata is collected for kubernetes but not nginx
-	assert.Len(t, fingerprintMetadata, 1)
+	// Verify metadata is collected for kubernetes but not nginx or empty tech
+	assert.Len(t, fingerprintMetadata, 1) // Still 1, empty tech metadata skipped
 	assert.NotNil(t, fingerprintMetadata["kubernetes"])
 	assert.Equal(t, "linux/amd64", fingerprintMetadata["kubernetes"]["platform"])
 	assert.Nil(t, fingerprintMetadata["nginx"])

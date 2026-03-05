@@ -275,11 +275,11 @@ func fingerprint(resp *http.Response, analyzer *wappalyzer.Wappalyze, client *ht
 	// Passive fingerprinters (work on root response)
 	for _, result := range fingerprinters.RunFingerprinters(resp, data) {
 		tech, resultCPEs, metadata := processFingerprintResult(result)
-		if tech != "" { // Guard against empty technology
+		if result.Technology != "" { // Guard against empty technology
 			technologies = append(technologies, tech)
 		}
 		cpes = append(cpes, resultCPEs...)
-		if metadata != nil {
+		if metadata != nil && result.Technology != "" {
 			fingerprintMetadata[result.Technology] = metadata
 		}
 	}
@@ -319,11 +319,11 @@ func fingerprint(resp *http.Response, analyzer *wappalyzer.Wappalyze, client *ht
 			if fp != nil && fp.Match(probeResp) {
 				if result, err := fp.Fingerprint(probeResp, probeBody); err == nil && result != nil {
 					tech, resultCPEs, metadata := processFingerprintResult(result)
-					if tech != "" { // Guard against empty technology
+					if result.Technology != "" { // Guard against empty technology
 						technologies = append(technologies, tech)
 					}
 					cpes = append(cpes, resultCPEs...)
-					if metadata != nil {
+					if metadata != nil && result.Technology != "" {
 						fingerprintMetadata[result.Technology] = metadata
 					}
 				}
