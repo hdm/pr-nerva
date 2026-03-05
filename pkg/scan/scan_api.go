@@ -15,15 +15,25 @@
 package scan
 
 import (
+	"context"
 	"log"
 
 	"github.com/praetorian-inc/nerva/pkg/plugins"
 )
 
+// TODO: integrate SCTP/UDP scan paths with worker pool. Currently sequential because:
+// 1. Different return types (*Service vs []*Service) need separate scanFunc adapters
+// 2. Different transport semantics (kernel SCTP, connectionless UDP)
+// 3. Rarely used at scale — primary parallelism benefit is TCP fingerprinting
 // SCTPScan performs SCTP scanning on all targets.
-func SCTPScan(targets []plugins.Target, config Config) ([]plugins.Service, error) {
+func SCTPScan(ctx context.Context, targets []plugins.Target, config Config) ([]plugins.Service, error) {
 	var results []plugins.Service
 	for _, target := range targets {
+		select {
+		case <-ctx.Done():
+			return results, nil
+		default:
+		}
 		result, err := config.SCTPScanTarget(target)
 		if err == nil && result != nil {
 			results = append(results, *result)
@@ -35,9 +45,15 @@ func SCTPScan(targets []plugins.Target, config Config) ([]plugins.Service, error
 	return results, nil
 }
 
-func UDPScan(targets []plugins.Target, config Config) ([]plugins.Service, error) {
+// UDPScan performs UDP scanning on all targets.
+func UDPScan(ctx context.Context, targets []plugins.Target, config Config) ([]plugins.Service, error) {
 	var results []plugins.Service
 	for _, target := range targets {
+		select {
+		case <-ctx.Done():
+			return results, nil
+		default:
+		}
 		result, err := config.UDPScanTarget(target)
 		if err == nil && result != nil {
 			results = append(results, *result)
@@ -51,27 +67,27 @@ func UDPScan(targets []plugins.Target, config Config) ([]plugins.Service, error)
 }
 
 // ScanTargets fingerprints service(s) running given a list of targets.
-func ScanTargets(targets []plugins.Target, config Config) ([]plugins.Service, error) {
-	var results []plugins.Service
-
+func ScanTargets(ctx context.Context, targets []plugins.Target, config Config) ([]plugins.Service, error) {
 	if config.SCTP {
-		return SCTPScan(targets, config)
+		return SCTPScan(ctx, targets, config)
 	}
 	if config.UDP {
-		return UDPScan(targets, config)
+		return UDPScan(ctx, targets, config)
 	}
 
-	for _, target := range targets {
-		targetResults, err := config.SimpleScanTarget(target)
-		if err == nil && len(targetResults) > 0 {
-			for _, r := range targetResults {
-				results = append(results, *r)
+	pool := NewScanPool(config)
+	fn := func(target plugins.Target) ([]plugins.Service, error) {
+		results, err := config.SimpleScanTarget(target)
+		if err != nil {
+			return nil, err
+		}
+		services := make([]plugins.Service, 0, len(results))
+		for _, r := range results {
+			if r != nil {
+				services = append(services, *r)
 			}
 		}
-		if config.Verbose && err != nil {
-			log.Printf("%s\n", err)
-		}
+		return services, nil
 	}
-
-	return results, nil
+	return pool.Run(ctx, targets, fn)
 }
