@@ -158,6 +158,7 @@ const (
 	ProtoSUA              = "sua"
 	ProtoSVN              = "svn"
 	ProtoSybase           = "sybase"
+	ProtoTeamViewer       = "teamviewer"
 	ProtoTelnet           = "telnet"
 	ProtoTFTP             = "tftp"
 	ProtoTURN             = "turn"
@@ -315,6 +316,10 @@ func (e Service) Metadata() Metadata {
 		return p
 	case ProtoXMPP:
 		var p ServiceXMPP
+		_ = json.Unmarshal(e.Raw, &p)
+		return p
+	case ProtoTeamViewer:
+		var p ServiceTeamViewer
 		_ = json.Unmarshal(e.Raw, &p)
 		return p
 	case ProtoTelnet:
@@ -1070,6 +1075,12 @@ func (e ServiceVMware) Type() string {
 		return ProtoVMwareVSphere
 	}
 }
+
+type ServiceTeamViewer struct {
+	CPEs []string `json:"cpes,omitempty"`
+}
+
+func (e ServiceTeamViewer) Type() string { return ProtoTeamViewer }
 
 type ServiceTelnet struct {
 	ServerData string `json:"serverData"`

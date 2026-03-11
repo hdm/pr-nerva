@@ -124,6 +124,7 @@ import (
 	_ "github.com/praetorian-inc/nerva/pkg/plugins/services/sua"
 	_ "github.com/praetorian-inc/nerva/pkg/plugins/services/svn"
 	_ "github.com/praetorian-inc/nerva/pkg/plugins/services/sybase"
+	_ "github.com/praetorian-inc/nerva/pkg/plugins/services/teamviewer"
 	_ "github.com/praetorian-inc/nerva/pkg/plugins/services/telnet"
 	_ "github.com/praetorian-inc/nerva/pkg/plugins/services/tftp"
 	_ "github.com/praetorian-inc/nerva/pkg/plugins/services/turn"
