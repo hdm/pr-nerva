@@ -16,11 +16,37 @@ package teamviewer
 
 import (
 	"bytes"
+	"net"
+	"net/netip"
 	"testing"
+	"time"
 
 	"github.com/praetorian-inc/nerva/pkg/plugins"
 	"github.com/stretchr/testify/assert"
 )
+
+// mockConn implements net.Conn for testing
+type mockConn struct {
+	readData  []byte
+	readIndex int
+}
+
+func (m *mockConn) Read(b []byte) (n int, err error) {
+	if m.readIndex >= len(m.readData) {
+		return 0, nil
+	}
+	n = copy(b, m.readData[m.readIndex:])
+	m.readIndex += n
+	return n, nil
+}
+
+func (m *mockConn) Write(b []byte) (n int, err error)  { return len(b), nil }
+func (m *mockConn) Close() error                       { return nil }
+func (m *mockConn) LocalAddr() net.Addr                { return nil }
+func (m *mockConn) RemoteAddr() net.Addr               { return nil }
+func (m *mockConn) SetDeadline(t time.Time) error      { return nil }
+func (m *mockConn) SetReadDeadline(t time.Time) error  { return nil }
+func (m *mockConn) SetWriteDeadline(t time.Time) error { return nil }
 
 func TestCheckTeamViewer(t *testing.T) {
 	t.Parallel()
@@ -144,4 +170,101 @@ func TestPluginMetadata(t *testing.T) {
 	assert.False(t, p.PortPriority(80))
 	assert.False(t, p.PortPriority(443))
 	assert.False(t, p.PortPriority(5900))
+}
+
+func TestTeamViewerPlugin_Run_ValidPrimaryMagic(t *testing.T) {
+	// CMD_PINGOK response with primary magic
+	conn := &mockConn{
+		readData: []byte{0x17, 0x24, 0x11, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00},
+	}
+
+	plugin := &TeamViewerPlugin{}
+	target := plugins.Target{
+		Address: netip.MustParseAddrPort("192.168.1.1:5938"),
+		Host:    "test-host",
+	}
+
+	service, err := plugin.Run(conn, time.Second*5, target)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, service)
+	assert.Equal(t, "teamviewer", service.Protocol)
+	assert.Equal(t, "192.168.1.1", service.IP)
+	assert.Equal(t, 5938, service.Port)
+	assert.Equal(t, "test-host", service.Host)
+
+	// Verify metadata has CPEs
+	metadata := service.Metadata()
+	tvMeta, ok := metadata.(plugins.ServiceTeamViewer)
+	assert.True(t, ok)
+	assert.Contains(t, tvMeta.CPEs, "cpe:2.3:a:teamviewer:teamviewer:*:*:*:*:*:*:*:*")
+}
+
+func TestTeamViewerPlugin_Run_ValidSecondaryMagic(t *testing.T) {
+	conn := &mockConn{
+		readData: []byte{0x11, 0x30, 0x11, 0x04, 0x00},
+	}
+
+	plugin := &TeamViewerPlugin{}
+	target := plugins.Target{
+		Address: netip.MustParseAddrPort("10.0.0.1:5938"),
+		Host:    "tv-server",
+	}
+
+	service, err := plugin.Run(conn, time.Second*5, target)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, service)
+	assert.Equal(t, "teamviewer", service.Protocol)
+}
+
+func TestTeamViewerPlugin_Run_NonTeamViewerResponse(t *testing.T) {
+	conn := &mockConn{
+		readData: []byte("HTTP/1.1 200 OK\r\n"),
+	}
+
+	plugin := &TeamViewerPlugin{}
+	target := plugins.Target{
+		Address: netip.MustParseAddrPort("192.168.1.2:5938"),
+		Host:    "test-host",
+	}
+
+	service, err := plugin.Run(conn, time.Second*5, target)
+
+	assert.NoError(t, err) // non-match returns nil, nil (not an error)
+	assert.Nil(t, service)
+}
+
+func TestTeamViewerPlugin_Run_EmptyResponse(t *testing.T) {
+	conn := &mockConn{
+		readData: []byte{},
+	}
+
+	plugin := &TeamViewerPlugin{}
+	target := plugins.Target{
+		Address: netip.MustParseAddrPort("192.168.1.3:5938"),
+		Host:    "test-host",
+	}
+
+	service, err := plugin.Run(conn, time.Second*5, target)
+
+	assert.NoError(t, err)
+	assert.Nil(t, service)
+}
+
+func TestTeamViewerPlugin_Run_TooShortResponse(t *testing.T) {
+	conn := &mockConn{
+		readData: []byte{0x17, 0x24}, // only 2 bytes, need 3
+	}
+
+	plugin := &TeamViewerPlugin{}
+	target := plugins.Target{
+		Address: netip.MustParseAddrPort("192.168.1.4:5938"),
+		Host:    "test-host",
+	}
+
+	service, err := plugin.Run(conn, time.Second*5, target)
+
+	assert.NoError(t, err)
+	assert.Nil(t, service)
 }
