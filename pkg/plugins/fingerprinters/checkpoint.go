@@ -77,39 +77,10 @@ func (f *CheckPointFingerprinter) ProbeEndpoint() string {
 }
 
 func (f *CheckPointFingerprinter) Match(resp *http.Response) bool {
-	// Accept 2xx-4xx responses (reject 5xx server errors)
 	if resp.StatusCode < 200 || resp.StatusCode >= 500 {
 		return false
 	}
-
-	// Check Server header for Check Point identifiers
-	serverHeader := strings.ToLower(resp.Header.Get("Server"))
-	if strings.Contains(serverHeader, "check point") || strings.Contains(serverHeader, "cpws") {
-		return true
-	}
-
-	// Check for Check Point specific headers
-	if resp.Header.Get("X-Check-Point") != "" {
-		return true
-	}
-
-	// Check for Check Point cookie patterns in Set-Cookie
-	for _, cookie := range resp.Header.Values("Set-Cookie") {
-		cookieLower := strings.ToLower(cookie)
-		if strings.Contains(cookieLower, "cpsession") ||
-			strings.Contains(cookieLower, "cpreferenceid") {
-			return true
-		}
-	}
-
-	// Check Location header for Gaia/SSL VPN redirects
-	location := strings.ToLower(resp.Header.Get("Location"))
-	if strings.Contains(location, "/cgi-bin/home.tcl") ||
-		strings.Contains(location, "/sslvpn/") {
-		return true
-	}
-
-	return false
+	return isCheckPointHeader(resp)
 }
 
 func (f *CheckPointFingerprinter) Fingerprint(resp *http.Response, body []byte) (*FingerprintResult, error) {
@@ -187,15 +158,6 @@ func isCheckPointHeader(resp *http.Response) bool {
 		}
 	}
 	return false
-}
-
-// isCheckPointBody checks response body for Check Point indicators.
-func isCheckPointBody(bodyStr string) bool {
-	return checkPointGaiaPortalPattern.MatchString(bodyStr) ||
-		checkPointMobileAccessPattern.MatchString(bodyStr) ||
-		checkPointSmartConsolePattern.MatchString(bodyStr) ||
-		checkPointVendorRefPattern.MatchString(bodyStr) ||
-		checkPointLoginPattern.MatchString(bodyStr)
 }
 
 // detectCheckPointProduct identifies the specific Check Point product type.
