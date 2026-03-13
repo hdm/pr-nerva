@@ -249,7 +249,12 @@ func TestBuildGotenbergCPE(t *testing.T) {
 }
 
 func TestGotenbergFingerprinter_Integration(t *testing.T) {
-	// init() already registers GotenbergFingerprinter; no need to register again.
+	saved := httpFingerprinters
+	t.Cleanup(func() { httpFingerprinters = saved })
+
+	httpFingerprinters = nil
+	Register(&GotenbergFingerprinter{})
+
 	body := []byte("8.9.1")
 
 	resp := &http.Response{
@@ -497,7 +502,12 @@ func TestGotenbergHealthFingerprinter_Integration(t *testing.T) {
 	const traceID = "dc34af5f-4e94-43b3-b8d6-5e2d99f42dc5"
 	const expectedCPE = "cpe:2.3:a:gotenberg:gotenberg:*:*:*:*:*:*:*:*"
 
-	// init() already registers GotenbergHealthFingerprinter; no need to register again.
+	saved := httpFingerprinters
+	t.Cleanup(func() { httpFingerprinters = saved })
+
+	httpFingerprinters = nil
+	Register(&GotenbergHealthFingerprinter{})
+
 	body := []byte(`{"status":"up","details":{"chromium":{"status":"up","timestamp":"2026-03-06T16:07:01.898483128Z"},"libreoffice":{"status":"up","timestamp":"2026-03-06T16:07:01.898473294Z"}}}`)
 
 	resp := &http.Response{
