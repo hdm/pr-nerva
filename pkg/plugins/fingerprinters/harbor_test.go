@@ -341,7 +341,10 @@ func TestBuildHarborCPE(t *testing.T) {
 }
 
 func TestHarborFingerprinter_Integration(t *testing.T) {
-	// Register the fingerprinter (should happen in init(), but we test it anyway)
+	// Clear registry
+	httpFingerprinters = nil
+
+	// Register should work via init() but test explicitly
 	fp := &HarborFingerprinter{}
 	Register(fp)
 
