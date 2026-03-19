@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/netip"
@@ -29,7 +30,7 @@ func main() {
 	targets = append(targets, target)
 
 	// run the scan
-	results, err := scan.ScanTargets(targets, fxConfig)
+	results, err := scan.ScanTargets(context.Background(), targets, fxConfig)
 	if err != nil {
 		log.Fatalf("error: %s\n", err)
 	}

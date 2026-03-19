@@ -57,6 +57,10 @@ func checkConfig(config cliConfig) error {
 		return errors.New("showErrors requires results being output in JSON or CSV format")
 	}
 
+	if config.resume && config.stateFile == "" {
+		return errors.New("--resume requires --state-file")
+	}
+
 	return nil
 }
 
@@ -65,7 +69,11 @@ func createScanConfig(config cliConfig) scan.Config {
 		DefaultTimeout: time.Duration(config.timeout) * time.Millisecond,
 		FastMode:       config.fastMode,
 		UDP:            config.useUDP,
-		SCTP:           config.useSCTP, Verbose: config.verbose,
+		SCTP:           config.useSCTP,
+		Verbose:        config.verbose,
+		Workers:        config.workers,
+		MaxHostConn:    config.maxHostConn,
+		RateLimit:      config.rateLimit,
 	}
 }
 

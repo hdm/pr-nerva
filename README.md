@@ -1,8 +1,8 @@
-<img width="2976" height="1440" alt="Nerva - Fast service fingerprinting CLI for network reconnaissance supporting 120+ protocols" src="https://github.com/user-attachments/assets/66f38a0c-dd23-42b6-9121-16fb2296f752" />
+<img width="2976" height="1440" alt="Nerva - Fast service fingerprinting CLI for network reconnaissance supporting 120+ protocols" src="https://github.com/user-attachments/assets/8bb40a77-a2cf-42a2-acbb-195a36623e00" />
 <h1 align="center">
   Nerva
   <br>
-  <sub>Fast Service Fingerprinting CLI</sub>
+  <sub>Nerva: Fast Service Fingerprinting CLI</sub>
 </h1>
 
 <p align="center">
@@ -124,6 +124,9 @@ EXAMPLES:
 | `--sctp` | `-S` | Run SCTP plugins (Linux only) | false |
 | `--timeout` | `-w` | Timeout in milliseconds | 2000 |
 | `--verbose` | `-v` | Verbose output to stderr | false |
+| `--workers` | `-W` | Concurrent scan workers | 50 |
+| `--max-host-conn` | `-H` | Max concurrent connections per host IP (0=unlimited) | 0 |
+| `--rate-limit` | `-R` | Max scans per second globally (0=unlimited) | 0 |
 
 ### Examples
 
@@ -157,6 +160,19 @@ nerva -t telecom-server:3868 -S
 
 ```sh
 nerva -l large-target-list.txt --fast --json
+```
+
+**Parallel scanning with rate limiting:**
+
+```sh
+nerva -l large-target-list.txt -W 100 -H 5 -R 50 -v
+```
+
+**Graceful shutdown** (Ctrl+C returns partial results):
+
+```sh
+nerva -l huge-target-list.txt -W 50 -v
+# Press Ctrl+C to stop — collected results are still printed
 ```
 
 ## Supported Protocols
@@ -372,6 +388,7 @@ Import Nerva into your Go applications:
 package main
 
 import (
+    "context"
     "fmt"
     "log"
     "net/netip"
@@ -397,7 +414,7 @@ func main() {
     }
 
     // Run scan
-    results, err := scan.ScanTargets([]plugins.Target{target}, config)
+    results, err := scan.ScanTargets(context.Background(), []plugins.Target{target}, config)
     if err != nil {
         log.Fatal(err)
     }

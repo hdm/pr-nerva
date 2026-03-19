@@ -44,6 +44,7 @@ const (
 	ProtoBGP              = "bgp"
 	ProtoCassandra        = "cassandra"
 	ProtoChromaDB         = "chromadb"
+	ProtoCitrixICA        = "citrix-ica"
 	ProtoCODESYS          = "codesys"
 	ProtoCrimsonV3        = "crimsonv3"
 	ProtoCUPS             = "cups"
@@ -93,6 +94,7 @@ const (
 	ProtoL2TP             = "l2tp"
 	ProtoLDAP             = "ldap"
 	ProtoLDAPS            = "ldaps"
+	ProtoLibreChat        = "librechat"
 	ProtoM2UA             = "m2ua"
 	ProtoM3UA             = "m3ua"
 	ProtoMegaco           = "megaco"
@@ -128,6 +130,7 @@ const (
 	ProtoPROFINET         = "profinet"
 	ProtoPulsar           = "pulsar"
 	ProtoPulsarAdmin      = "pulsar-admin"
+	ProtoQdrant           = "qdrant"
 	ProtoRDP              = "rdp"
 	ProtoRedis            = "redis"
 	ProtoRedisTLS         = "redis"
@@ -136,6 +139,7 @@ const (
 	ProtoRsync            = "rsync"
 	ProtoRtsp             = "rtsp"
 	ProtoS7comm           = "s7comm"
+	ProtoSAPNetWeaver     = "sap-netweaver"
 	ProtoSCCP             = "sccp"
 	ProtoSGsAP            = "sgsap"
 	ProtoSIP              = "sip"
@@ -152,12 +156,17 @@ const (
 	ProtoSSH              = "ssh"
 	ProtoSSTP             = "sstp"
 	ProtoStun             = "stun"
+	ProtoSUA              = "sua"
 	ProtoSVN              = "svn"
 	ProtoSybase           = "sybase"
+	ProtoTeamViewer       = "teamviewer"
 	ProtoTelnet           = "telnet"
 	ProtoTFTP             = "tftp"
 	ProtoTURN             = "turn"
 	ProtoVNC              = "vnc"
+	ProtoVMwareESXi       = "vmware-esxi"
+	ProtoVMwareVCenter    = "vmware-vcenter"
+	ProtoVMwareVSphere    = "vmware-vsphere"
 	ProtoWireGuard        = "wireguard"
 	ProtoXMPP             = "xmpp"
 	ProtoX11              = "x11"
@@ -220,6 +229,10 @@ func (e Service) Metadata() Metadata {
 		return p
 	case ProtoChromaDB:
 		var p ServiceChromaDB
+		_ = json.Unmarshal(e.Raw, &p)
+		return p
+	case ProtoCitrixICA:
+		var p ServiceCitrixICA
 		_ = json.Unmarshal(e.Raw, &p)
 		return p
 	case ProtoCODESYS:
@@ -294,6 +307,10 @@ func (e Service) Metadata() Metadata {
 		var p ServiceVNC
 		_ = json.Unmarshal(e.Raw, &p)
 		return p
+	case ProtoVMwareESXi, ProtoVMwareVCenter, ProtoVMwareVSphere:
+		var p ServiceVMware
+		_ = json.Unmarshal(e.Raw, &p)
+		return p
 	case ProtoWireGuard:
 		var p ServiceWireGuard
 		_ = json.Unmarshal(e.Raw, &p)
@@ -304,6 +321,10 @@ func (e Service) Metadata() Metadata {
 		return p
 	case ProtoXMPP:
 		var p ServiceXMPP
+		_ = json.Unmarshal(e.Raw, &p)
+		return p
+	case ProtoTeamViewer:
+		var p ServiceTeamViewer
 		_ = json.Unmarshal(e.Raw, &p)
 		return p
 	case ProtoTelnet:
@@ -434,12 +455,20 @@ func (e Service) Metadata() Metadata {
 		var p ServiceLDAPS
 		_ = json.Unmarshal(e.Raw, &p)
 		return p
+	case ProtoLibreChat:
+		var p ServiceLibreChat
+		_ = json.Unmarshal(e.Raw, &p)
+		return p
 	case ProtoM2UA:
 		var p ServiceM2UA
 		_ = json.Unmarshal(e.Raw, &p)
 		return p
 	case ProtoM3UA:
 		var p ServiceM3UA
+		_ = json.Unmarshal(e.Raw, &p)
+		return p
+	case ProtoSUA:
+		var p ServiceSUA
 		_ = json.Unmarshal(e.Raw, &p)
 		return p
 	case ProtoSSH:
@@ -568,6 +597,10 @@ func (e Service) Metadata() Metadata {
 		return p
 	case ProtoPulsarAdmin:
 		var p ServicePulsarAdmin
+		_ = json.Unmarshal(e.Raw, &p)
+		return p
+	case ProtoQdrant:
+		var p ServiceQdrant
 		_ = json.Unmarshal(e.Raw, &p)
 		return p
 	case ProtoSNPP:
@@ -702,21 +735,23 @@ type Service struct {
 }
 
 type ServiceHTTP struct {
-	Status          string      `json:"status"`     // e.g. "200 OK"
-	StatusCode      int         `json:"statusCode"` // e.g. 200
-	ResponseHeaders http.Header `json:"responseHeaders"`
-	Technologies    []string    `json:"technologies,omitempty"`
-	CPEs            []string    `json:"cpes,omitempty"`
+	Status              string                    `json:"status"`     // e.g. "200 OK"
+	StatusCode          int                       `json:"statusCode"` // e.g. 200
+	ResponseHeaders     http.Header               `json:"responseHeaders"`
+	Technologies        []string                  `json:"technologies,omitempty"`
+	CPEs                []string                  `json:"cpes,omitempty"`
+	FingerprintMetadata map[string]map[string]any `json:"fingerprintMetadata,omitempty"`
 }
 
 func (e ServiceHTTP) Type() string { return ProtoHTTP }
 
 type ServiceHTTPS struct {
-	Status          string      `json:"status"`     // e.g. "200 OK"
-	StatusCode      int         `json:"statusCode"` // e.g. 200
-	ResponseHeaders http.Header `json:"responseHeaders"`
-	Technologies    []string    `json:"technologies,omitempty"`
-	CPEs            []string    `json:"cpes,omitempty"`
+	Status              string                    `json:"status"`     // e.g. "200 OK"
+	StatusCode          int                       `json:"statusCode"` // e.g. 200
+	ResponseHeaders     http.Header               `json:"responseHeaders"`
+	Technologies        []string                  `json:"technologies,omitempty"`
+	CPEs                []string                  `json:"cpes,omitempty"`
+	FingerprintMetadata map[string]map[string]any `json:"fingerprintMetadata,omitempty"`
 }
 
 func (e ServiceHTTPS) Type() string { return ProtoHTTPS }
@@ -832,6 +867,12 @@ type ServicePulsarAdmin struct {
 }
 
 func (e ServicePulsarAdmin) Type() string { return ProtoPulsarAdmin }
+
+type ServiceQdrant struct {
+	CPEs []string `json:"cpes,omitempty"`
+}
+
+func (e ServiceQdrant) Type() string { return ProtoQdrant }
 
 type ServiceSNMP struct{}
 
@@ -1018,6 +1059,34 @@ type ServiceVNC struct{}
 
 func (e ServiceVNC) Type() string { return ProtoVNC }
 
+type ServiceVMware struct {
+	ProductType   string   `json:"productType"`              // "esxi", "vcenter", or "vsphere"
+	FullName      string   `json:"fullName,omitempty"`
+	Build         string   `json:"build,omitempty"`
+	ApiType       string   `json:"apiType,omitempty"`
+	ApiVersion    string   `json:"apiVersion,omitempty"`
+	OsType        string   `json:"osType,omitempty"`
+	ProductLineId string   `json:"productLineId,omitempty"`
+	CPEs          []string `json:"cpes,omitempty"`
+}
+
+func (e ServiceVMware) Type() string {
+	switch e.ProductType {
+	case "esxi":
+		return ProtoVMwareESXi
+	case "vcenter":
+		return ProtoVMwareVCenter
+	default:
+		return ProtoVMwareVSphere
+	}
+}
+
+type ServiceTeamViewer struct {
+	CPEs []string `json:"cpes,omitempty"`
+}
+
+func (e ServiceTeamViewer) Type() string { return ProtoTeamViewer }
+
 type ServiceTelnet struct {
 	ServerData string `json:"serverData"`
 }
@@ -1192,6 +1261,14 @@ func (e ServiceLDAP) Type() string { return ProtoLDAP }
 type ServiceLDAPS struct{}
 
 func (e ServiceLDAPS) Type() string { return ProtoLDAPS }
+
+type ServiceLibreChat struct {
+	ConfigVersion string   `json:"configVersion,omitempty"`
+	HasHealth     bool     `json:"hasHealth,omitempty"`
+	CPEs          []string `json:"cpes,omitempty"`
+}
+
+func (e ServiceLibreChat) Type() string { return ProtoLibreChat }
 
 type ServiceKafka struct{}
 
@@ -1536,6 +1613,13 @@ type ServiceChromaDB struct {
 
 func (e ServiceChromaDB) Type() string { return ProtoChromaDB }
 
+type ServiceCitrixICA struct {
+	BannerMatch bool     `json:"bannerMatch"`          // true if double ICA signature matched (high confidence)
+	CPEs        []string `json:"cpes,omitempty"`
+}
+
+func (e ServiceCitrixICA) Type() string { return ProtoCitrixICA }
+
 type ServiceCODESYS struct {
 	Version     string   `json:"version,omitempty"`
 	DeviceName  string   `json:"deviceName,omitempty"`
@@ -1611,6 +1695,15 @@ type ServiceRMI struct {
 
 func (e ServiceRMI) Type() string { return ProtoRMI }
 
+type ServiceM2UA struct {
+	InfoString   string `json:"infoString,omitempty"`
+	ErrorCode    uint32 `json:"errorCode,omitempty"`
+	MessageClass uint8  `json:"messageClass,omitempty"`
+	MessageType  uint8  `json:"messageType,omitempty"`
+}
+
+func (e ServiceM2UA) Type() string { return ProtoM2UA }
+
 type ServiceM3UA struct {
 	InfoString   string `json:"infoString,omitempty"`
 	ErrorCode    uint32 `json:"errorCode,omitempty"`
@@ -1620,15 +1713,14 @@ type ServiceM3UA struct {
 
 func (e ServiceM3UA) Type() string { return ProtoM3UA }
 
-// ServiceM2UA contains metadata for M2UA services over SCTP transport
-type ServiceM2UA struct {
+type ServiceSUA struct {
 	InfoString   string `json:"infoString,omitempty"`
 	ErrorCode    uint32 `json:"errorCode,omitempty"`
 	MessageClass uint8  `json:"messageClass,omitempty"`
 	MessageType  uint8  `json:"messageType,omitempty"`
 }
 
-func (e ServiceM2UA) Type() string { return ProtoM2UA }
+func (e ServiceSUA) Type() string { return ProtoSUA }
 
 type ServiceActiveMQOpenWire struct {
 	Version int      `json:"version,omitempty"` // OpenWire protocol version (1-12)

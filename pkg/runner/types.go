@@ -26,4 +26,11 @@ type cliConfig struct {
 	verbose          bool
 	showErrors       bool
 	showCapabilities bool
+	workers          int
+	maxHostConn      int
+	rateLimit        float64
+	// Resume support
+	stateFile string
+	resume    bool
+	autoSave  int
 }
