@@ -40,6 +40,7 @@ const (
 	ProtoActiveMQOpenWire = "activemq-openwire"
 	ProtoATG              = "atg"
 	ProtoAMQP             = "amqp"
+	ProtoAnyDesk          = "anydesk"
 	ProtoBACnet           = "bacnet"
 	ProtoBGP              = "bgp"
 	ProtoCassandra        = "cassandra"
@@ -649,6 +650,10 @@ func (e Service) Metadata() Metadata {
 		return p
 	case ProtoAMQP:
 		var p ServiceAMQP
+		_ = json.Unmarshal(e.Raw, &p)
+		return p
+	case ProtoAnyDesk:
+		var p ServiceAnyDesk
 		_ = json.Unmarshal(e.Raw, &p)
 		return p
 	case ProtoBACnet:
@@ -1746,6 +1751,14 @@ type ServiceAMQP struct {
 }
 
 func (e ServiceAMQP) Type() string { return ProtoAMQP }
+
+type ServiceAnyDesk struct {
+	CertSubject string   `json:"certSubject,omitempty"`
+	SelfSigned  bool     `json:"selfSigned"`
+	CPEs        []string `json:"cpes,omitempty"`
+}
+
+func (e ServiceAnyDesk) Type() string { return ProtoAnyDesk }
 
 type ServiceZooKeeper struct {
 	CPEs        []string `json:"cpes,omitempty"`        // Common Platform Enumeration identifiers for vulnerability tracking
