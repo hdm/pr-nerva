@@ -46,6 +46,7 @@ const (
 	ProtoCassandra        = "cassandra"
 	ProtoChromaDB         = "chromadb"
 	ProtoCitrixICA        = "citrix-ica"
+	ProtoCoAP             = "coap"
 	ProtoCODESYS          = "codesys"
 	ProtoCrimsonV3        = "crimsonv3"
 	ProtoCUPS             = "cups"
@@ -234,6 +235,10 @@ func (e Service) Metadata() Metadata {
 		return p
 	case ProtoCitrixICA:
 		var p ServiceCitrixICA
+		_ = json.Unmarshal(e.Raw, &p)
+		return p
+	case ProtoCoAP:
+		var p ServiceCoAP
 		_ = json.Unmarshal(e.Raw, &p)
 		return p
 	case ProtoCODESYS:
@@ -1624,6 +1629,12 @@ type ServiceCitrixICA struct {
 }
 
 func (e ServiceCitrixICA) Type() string { return ProtoCitrixICA }
+
+type ServiceCoAP struct {
+	Resources string `json:"resources,omitempty"`
+}
+
+func (e ServiceCoAP) Type() string { return ProtoCoAP }
 
 type ServiceCODESYS struct {
 	Version     string   `json:"version,omitempty"`
