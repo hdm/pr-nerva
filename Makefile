@@ -1,5 +1,6 @@
 # Makefile for nerva - Service fingerprinting utility
-.PHONY: all build test test-unit test-integration clean help lint fmt vet install test-coverage
+.PHONY: all build test test-unit test-integration clean help lint fmt vet install test-coverage \
+        release release-checksums
 .DEFAULT_GOAL := help
 .DELETE_ON_ERROR:
 
@@ -7,7 +8,11 @@
 GO ?= go
 BINARY_NAME ?= nerva
 BUILD_DIR ?= .
+DIST_DIR := dist
 CMD_DIR := ./cmd/nerva
+
+# Version info (override with: make build VERSION=1.0.0)
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 
 # Go build flags
 GO_FLAGS ?= -v -trimpath
@@ -84,6 +89,28 @@ clean: ## Remove build artifacts
 	rm -f $(BINARY_NAME)
 	rm -f *.test
 	rm -f $(COVERAGE_FILE)
+	rm -rf $(DIST_DIR)
+
+#############################################################################
+# Release Targets (CI/CD)
+#############################################################################
+
+release: ## Build release tarballs for all platforms (outputs to dist/)
+	@mkdir -p $(DIST_DIR)/staging
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build -ldflags "$(GO_LDFLAGS)" -o $(DIST_DIR)/staging/$(BINARY_NAME) $(CMD_DIR)
+	tar -czf $(DIST_DIR)/$(BINARY_NAME)-linux-amd64.tar.gz -C $(DIST_DIR)/staging $(BINARY_NAME)
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GO) build -ldflags "$(GO_LDFLAGS)" -o $(DIST_DIR)/staging/$(BINARY_NAME) $(CMD_DIR)
+	tar -czf $(DIST_DIR)/$(BINARY_NAME)-linux-arm64.tar.gz -C $(DIST_DIR)/staging $(BINARY_NAME)
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 $(GO) build -ldflags "$(GO_LDFLAGS)" -o $(DIST_DIR)/staging/$(BINARY_NAME) $(CMD_DIR)
+	tar -czf $(DIST_DIR)/$(BINARY_NAME)-darwin-amd64.tar.gz -C $(DIST_DIR)/staging $(BINARY_NAME)
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(GO) build -ldflags "$(GO_LDFLAGS)" -o $(DIST_DIR)/staging/$(BINARY_NAME) $(CMD_DIR)
+	tar -czf $(DIST_DIR)/$(BINARY_NAME)-darwin-arm64.tar.gz -C $(DIST_DIR)/staging $(BINARY_NAME)
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GO) build -ldflags "$(GO_LDFLAGS)" -o $(DIST_DIR)/staging/$(BINARY_NAME).exe $(CMD_DIR)
+	cd $(DIST_DIR)/staging && zip ../$(BINARY_NAME)-windows-amd64.zip $(BINARY_NAME).exe
+	rm -rf $(DIST_DIR)/staging
+
+release-checksums: release ## Generate checksums for release archives
+	cd $(DIST_DIR) && sha256sum *.tar.gz *.zip > checksums.txt
 
 #############################################################################
 # SCTP Testing Infrastructure (requires Linux)

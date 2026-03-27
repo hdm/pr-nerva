@@ -37,4 +37,5 @@ coverage-sctp.out
 /testdata/freediameter/*.key
 /nerva
 
-code-quality-review.mddist/
+code-quality-review.md
+dist/
