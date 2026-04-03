@@ -139,6 +139,7 @@ const (
 	ProtoModbus           = "modbus"
 	ProtoMongoDB          = "mongodb"
 	ProtoMQTT             = "mqtt"
+	ProtoMSRPC            = "msrpc"
 	ProtoMSSQL            = "mssql"
 	ProtoMySQL            = "mysql"
 	ProtoMySQLX           = "mysqlx"
@@ -400,6 +401,10 @@ func (e Service) Metadata() Metadata {
 		return p
 	case ProtoRPC:
 		var p ServiceRPC
+		_ = json.Unmarshal(e.Raw, &p)
+		return p
+	case ProtoMSRPC:
+		var p ServiceMSRPC
 		_ = json.Unmarshal(e.Raw, &p)
 		return p
 	case ProtoMSSQL:
@@ -1110,6 +1115,10 @@ type ServicePPTP struct {
 }
 
 func (e ServicePPTP) Type() string { return ProtoPPTP }
+
+type ServiceMSRPC struct{}
+
+func (e ServiceMSRPC) Type() string { return ProtoMSRPC }
 
 type ServiceMSSQL struct {
 	CPEs []string `json:"cpes,omitempty"` // Common Platform Enumeration identifiers for vulnerability tracking
