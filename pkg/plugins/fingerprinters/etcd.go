@@ -82,17 +82,11 @@ func (f *EtcdFingerprinter) Fingerprint(resp *http.Response, body []byte) (*Fing
 	}
 
 	return &FingerprintResult{
-		Technology:      "etcd",
-		Version:         data.ETCDServer,
-		CPEs:            []string{buildEtcdCPE(data.ETCDServer)},
-		Metadata:        metadata,
-		AnonymousAccess: true,
-		Findings: []plugins.SecurityFinding{{
-			ID:          "etcd-anon-access",
-			Severity:    plugins.SeverityHigh,
-			Description: "Etcd accessible without authentication",
-			Evidence:    "Successfully queried /version endpoint without credentials",
-		}},
+		Technology: "etcd",
+		Version:    data.ETCDServer,
+		CPEs:       []string{buildEtcdCPE(data.ETCDServer)},
+		Metadata:   metadata,
+		Severity:   plugins.SeverityHigh,
 	}, nil
 }
 

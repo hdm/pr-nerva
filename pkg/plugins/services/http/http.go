@@ -119,7 +119,7 @@ func (p *HTTPPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Ta
 	defer resp.Body.Close()
 
 	baseURL := fmt.Sprintf("http://%s", conn.RemoteAddr().String())
-	technologies, cpes, fingerprintMetadata, anonAccess, findings, _ := p.FingerprintResponse(resp, &client, baseURL, target.Host)
+	technologies, cpes, fingerprintMetadata, fingerprintedTechs, _ := p.FingerprintResponse(resp, &client, baseURL, target.Host)
 
 	payload := plugins.ServiceHTTP{
 		Status:          resp.Status,
@@ -137,10 +137,17 @@ func (p *HTTPPlugin) Run(conn net.Conn, timeout time.Duration, target plugins.Ta
 	}
 
 	service := plugins.CreateServiceFrom(target, payload, false, resp.Header.Get("Server"), plugins.TCP)
-	if anonAccess {
+	if target.Misconfigs && len(fingerprintedTechs) > 0 {
 		service.AnonymousAccess = true
+		for _, ft := range fingerprintedTechs {
+			service.SecurityFindings = append(service.SecurityFindings, plugins.SecurityFinding{
+				ID:          ft.name + "-anon-access",
+				Severity:    ft.severity,
+				Description: ft.name + " accessible without authentication",
+				Evidence:    "Successfully queried endpoint without credentials",
+			})
+		}
 	}
-	service.SecurityFindings = append(service.SecurityFindings, findings...)
 	return service, nil
 }
 
@@ -187,7 +194,7 @@ func (p *HTTPSPlugin) Run(
 	defer resp.Body.Close()
 
 	baseURL := fmt.Sprintf("https://%s", conn.RemoteAddr().String())
-	technologies, cpes, fingerprintMetadata, anonAccess, findings, _ := p.FingerprintResponse(resp, &client, baseURL, target.Host)
+	technologies, cpes, fingerprintMetadata, fingerprintedTechs, _ := p.FingerprintResponse(resp, &client, baseURL, target.Host)
 
 	payload := plugins.ServiceHTTPS{
 		Status:          resp.Status,
@@ -205,10 +212,17 @@ func (p *HTTPSPlugin) Run(
 	}
 
 	service := plugins.CreateServiceFrom(target, payload, true, resp.Header.Get("Server"), plugins.TCP)
-	if anonAccess {
+	if target.Misconfigs && len(fingerprintedTechs) > 0 {
 		service.AnonymousAccess = true
+		for _, ft := range fingerprintedTechs {
+			service.SecurityFindings = append(service.SecurityFindings, plugins.SecurityFinding{
+				ID:          ft.name + "-anon-access",
+				Severity:    ft.severity,
+				Description: ft.name + " accessible without authentication",
+				Evidence:    "Successfully queried endpoint without credentials",
+			})
+		}
 	}
-	service.SecurityFindings = append(service.SecurityFindings, findings...)
 	return service, nil
 }
 
@@ -234,11 +248,11 @@ func (p *HTTPPlugin) Name() string {
 func (p *HTTPSPlugin) Name() string {
 	return HTTPS
 }
-func (p *HTTPPlugin) FingerprintResponse(resp *http.Response, client *http.Client, baseURL string, host string) ([]string, []string, map[string]map[string]any, bool, []plugins.SecurityFinding, error) {
+func (p *HTTPPlugin) FingerprintResponse(resp *http.Response, client *http.Client, baseURL string, host string) ([]string, []string, map[string]map[string]any, []fingerprintedTech, error) {
 	return fingerprint(resp, p.analyzer, client, baseURL, host)
 }
 
-func (p *HTTPSPlugin) FingerprintResponse(resp *http.Response, client *http.Client, baseURL string, host string) ([]string, []string, map[string]map[string]any, bool, []plugins.SecurityFinding, error) {
+func (p *HTTPSPlugin) FingerprintResponse(resp *http.Response, client *http.Client, baseURL string, host string) ([]string, []string, map[string]map[string]any, []fingerprintedTech, error) {
 	return fingerprint(resp, p.analyzer, client, baseURL, host)
 }
 
@@ -251,24 +265,29 @@ func formatTechnologyWithVersion(technology, version string) string {
 	return technology + ":" + version
 }
 
-// processFingerprintResult extracts technology (with version), CPEs, metadata, and security findings from a FingerprintResult.
-func processFingerprintResult(result *fingerprinters.FingerprintResult) (string, []string, map[string]any, bool, []plugins.SecurityFinding) {
-	if result == nil {
-		return "", nil, nil, false, nil
-	}
-	tech := formatTechnologyWithVersion(result.Technology, result.Version)
-	return tech, result.CPEs, result.Metadata, result.AnonymousAccess, result.Findings
+// fingerprintedTech pairs a formatted technology name with its severity.
+type fingerprintedTech struct {
+	name     string
+	severity plugins.Severity
 }
 
-func fingerprint(resp *http.Response, analyzer *wappalyzer.Wappalyze, client *http.Client, baseURL string, host string) ([]string, []string, map[string]map[string]any, bool, []plugins.SecurityFinding, error) {
+// processFingerprintResult extracts technology (with version), CPEs, metadata, and severity from a FingerprintResult.
+func processFingerprintResult(result *fingerprinters.FingerprintResult) (string, []string, map[string]any, plugins.Severity) {
+	if result == nil {
+		return "", nil, nil, ""
+	}
+	tech := formatTechnologyWithVersion(result.Technology, result.Version)
+	return tech, result.CPEs, result.Metadata, result.Severity
+}
+
+func fingerprint(resp *http.Response, analyzer *wappalyzer.Wappalyze, client *http.Client, baseURL string, host string) ([]string, []string, map[string]map[string]any, []fingerprintedTech, error) {
 	var technologies, cpes []string
+	var fingerprintedTechs []fingerprintedTech
 	fingerprintMetadata := make(map[string]map[string]any)
-	var allFindings []plugins.SecurityFinding
-	hasAnonymousAccess := false
 	maxResponseSize := int64(10 * 1024 * 1024) // 10MB limit
 	data, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseSize))
 	if err != nil {
-		return nil, nil, nil, false, nil, err
+		return nil, nil, nil, nil, err
 	}
 	// Close body to release connection for reuse by active fingerprinters.
 	// Without this, the transport may not return the connection to the idle pool,
@@ -286,18 +305,17 @@ func fingerprint(resp *http.Response, analyzer *wappalyzer.Wappalyze, client *ht
 
 	// Passive fingerprinters (work on root response)
 	for _, result := range fingerprinters.RunFingerprinters(resp, data) {
-		tech, resultCPEs, metadata, anonAccess, findings := processFingerprintResult(result)
+		tech, resultCPEs, metadata, severity := processFingerprintResult(result)
 		if result.Technology != "" { // Guard against empty technology
 			technologies = append(technologies, tech)
+			if result.Severity != "" {
+				fingerprintedTechs = append(fingerprintedTechs, fingerprintedTech{name: tech, severity: severity})
+			}
 		}
 		cpes = append(cpes, resultCPEs...)
 		if metadata != nil && result.Technology != "" {
 			fingerprintMetadata[result.Technology] = metadata
 		}
-		if anonAccess {
-			hasAnonymousAccess = true
-		}
-		allFindings = append(allFindings, findings...)
 	}
 
 	// Active fingerprinters (probe specific endpoints)
@@ -334,22 +352,21 @@ func fingerprint(resp *http.Response, analyzer *wappalyzer.Wappalyze, client *ht
 			fp := fingerprinters.GetFingerprinterByName(fpName)
 			if fp != nil && fp.Match(probeResp) {
 				if result, err := fp.Fingerprint(probeResp, probeBody); err == nil && result != nil {
-					tech, resultCPEs, metadata, anonAccess, findings := processFingerprintResult(result)
+					tech, resultCPEs, metadata, severity := processFingerprintResult(result)
 					if result.Technology != "" { // Guard against empty technology
 						technologies = append(technologies, tech)
+						if result.Severity != "" {
+							fingerprintedTechs = append(fingerprintedTechs, fingerprintedTech{name: tech, severity: severity})
+						}
 					}
 					cpes = append(cpes, resultCPEs...)
 					if metadata != nil && result.Technology != "" {
 						fingerprintMetadata[result.Technology] = metadata
 					}
-					if anonAccess {
-						hasAnonymousAccess = true
-					}
-					allFindings = append(allFindings, findings...)
 				}
 			}
 		}
 	}
 
-	return technologies, cpes, fingerprintMetadata, hasAnonymousAccess, allFindings, nil
+	return technologies, cpes, fingerprintMetadata, fingerprintedTechs, nil
 }

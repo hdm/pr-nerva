@@ -167,17 +167,11 @@ func (f *PrometheusFingerprinter) Fingerprint(resp *http.Response, body []byte) 
 	}
 
 	return &FingerprintResult{
-		Technology:      "prometheus",
-		Version:         buildInfo.Data.Version,
-		CPEs:            []string{buildPrometheusCPE(buildInfo.Data.Version)},
-		Metadata:        metadata,
-		AnonymousAccess: true,
-		Findings: []plugins.SecurityFinding{{
-			ID:          "prometheus-anon-access",
-			Severity:    plugins.SeverityLow,
-			Description: "Prometheus accessible without authentication",
-			Evidence:    "Successfully queried /api/v1/status/buildinfo without credentials",
-		}},
+		Technology: "prometheus",
+		Version:    buildInfo.Data.Version,
+		CPEs:       []string{buildPrometheusCPE(buildInfo.Data.Version)},
+		Metadata:   metadata,
+		Severity:   plugins.SeverityLow,
 	}, nil
 }
 

@@ -142,17 +142,11 @@ func (f *VaultFingerprinter) Fingerprint(resp *http.Response, body []byte) (*Fin
 	}
 
 	return &FingerprintResult{
-		Technology:      "vault",
-		Version:         health.Version,
-		CPEs:            []string{buildVaultCPE(health.Version)},
-		Metadata:        metadata,
-		AnonymousAccess: true,
-		Findings: []plugins.SecurityFinding{{
-			ID:          "vault-anon-access",
-			Severity:    plugins.SeverityMedium,
-			Description: "Vault API accessible without authentication",
-			Evidence:    "Successfully queried /v1/sys/health without credentials",
-		}},
+		Technology: "vault",
+		Version:    health.Version,
+		CPEs:       []string{buildVaultCPE(health.Version)},
+		Metadata:   metadata,
+		Severity:   plugins.SeverityMedium,
 	}, nil
 }
 

@@ -81,20 +81,14 @@ func (f *ElasticsearchFingerprinter) Fingerprint(resp *http.Response, body []byt
 	version = cleanVersionString(version)
 
 	return &FingerprintResult{
-		Technology:      "elasticsearch",
-		Version:         version,
-		CPEs:            []string{buildElasticsearchCPE(version)},
+		Technology: "elasticsearch",
+		Version:    version,
+		CPEs:       []string{buildElasticsearchCPE(version)},
 		Metadata: map[string]any{
 			"cluster_name":   esResponse.ClusterName,
 			"lucene_version": esResponse.Version.LuceneVersion,
 		},
-		AnonymousAccess: true,
-		Findings: []plugins.SecurityFinding{{
-			ID:          "elasticsearch-anon-access",
-			Severity:    plugins.SeverityHigh,
-			Description: "Elasticsearch accessible without authentication",
-			Evidence:    "Successfully queried root endpoint without credentials",
-		}},
+		Severity: plugins.SeverityHigh,
 	}, nil
 }
 
