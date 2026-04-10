@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -151,7 +152,7 @@ func (p *ScanPool) safeProcessTarget(ctx context.Context, target plugins.Target,
 	defer func() {
 		if r := recover(); r != nil {
 			p.failed.Add(1)
-			log.Printf("recovered panic while scanning %s: %v", target.Address, r)
+			log.Printf("recovered panic while scanning %s: %v\n%s", target.Address, r, debug.Stack())
 		}
 	}()
 	p.processTarget(ctx, target, fn, resultCh)
